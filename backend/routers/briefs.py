@@ -1,11 +1,55 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, status, Query
-from typing import Optional
-from models.schemas import BriefCreate, Brief, Task
+from typing import Optional, Dict, Any
+from models.schemas import BriefCreate
 from services.clerk_auth import get_current_user
 from services.supabase_client import get_supabase
 from services.agent_manager import get_agent_manager, AgentManager
 
 router = APIRouter()
+
+
+def _map_task(task: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": task.get("id"),
+        "briefId": task.get("brief_id"),
+        "role": task.get("role"),
+        "title": task.get("title"),
+        "description": task.get("description") or "",
+        "status": task.get("status"),
+        "createdAt": task.get("created_at")
+    }
+
+
+def _map_brief(brief: Dict[str, Any], include_tasks: bool = True) -> Dict[str, Any]:
+    mapped = {
+        "id": brief.get("id"),
+        "orgId": brief.get("org_id"),
+        "name": brief.get("name"),
+        "description": brief.get("description") or "",
+        "status": brief.get("status"),
+        "createdBy": brief.get("created_by"),
+        "createdAt": brief.get("created_at")
+    }
+
+    if include_tasks and isinstance(brief.get("tasks"), list):
+        mapped["tasks"] = [_map_task(task) for task in brief.get("tasks", [])]
+
+    return mapped
+
+
+def _map_submission(submission: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": submission.get("id"),
+        "briefId": submission.get("brief_id"),
+        "userId": submission.get("user_id"),
+        "userName": submission.get("user_name"),
+        "role": submission.get("role"),
+        "summaryLines": submission.get("summary_lines") or [],
+        "durationMinutes": submission.get("duration_minutes") or 0,
+        "matchedTasks": submission.get("matched_tasks") or [],
+        "status": submission.get("status"),
+        "createdAt": submission.get("created_at")
+    }
 
 
 @router.post("/briefs", status_code=status.HTTP_201_CREATED)
@@ -75,7 +119,7 @@ async def create_brief(
     # Fetch brief with tasks
     brief_with_tasks = supabase.table("briefs").select("*, tasks(*)").eq("id", brief["id"]).single().execute()
     
-    return brief_with_tasks.data
+    return _map_brief(brief_with_tasks.data, include_tasks=True)
 
 
 @router.get("/briefs/{brief_id}")
@@ -96,7 +140,41 @@ async def get_brief(
             detail={"code": "NOT_FOUND", "message": "Brief not found"}
         )
     
-    return response.data
+    return _map_brief(response.data, include_tasks=True)
+
+
+@router.get("/briefs")
+async def list_briefs(
+    authorization: str = Header(...),
+):
+    """List briefs for the current organization"""
+    user = await get_current_user(authorization)
+    supabase = get_supabase()
+
+    response = supabase.table("briefs").select("*").eq("org_id", user["orgId"]).order("created_at", desc=True).execute()
+    briefs = response.data or []
+
+    return {"briefs": [_map_brief(brief, include_tasks=False) for brief in briefs]}
+
+
+@router.delete("/briefs/{brief_id}")
+async def delete_brief(
+    brief_id: str,
+    authorization: str = Header(...)
+):
+    """Delete a brief"""
+    user = await get_current_user(authorization)
+    supabase = get_supabase()
+
+    response = supabase.table("briefs").delete().eq("id", brief_id).eq("org_id", user["orgId"]).execute()
+
+    if not response.data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Brief not found"}
+        )
+
+    return {"id": brief_id, "deleted": True}
 
 
 @router.get("/briefs/{brief_id}/tasks")
@@ -129,9 +207,11 @@ async def get_tasks(
     
     response = query.execute()
     
+    tasks = response.data or []
+
     return {
-        "tasks": response.data or [],
-        "total": len(response.data or [])
+        "tasks": [_map_task(task) for task in tasks],
+        "total": len(tasks)
     }
 
 
@@ -218,9 +298,11 @@ async def get_submissions_for_brief(
     
     response = query.execute()
     
+    submissions = response.data or []
+
     return {
-        "submissions": response.data or [],
-        "total": len(response.data or []),
+        "submissions": [_map_submission(sub) for sub in submissions],
+        "total": len(submissions),
         "limit": limit,
         "offset": offset
     }

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { FileText, Users, Code, Palette, Briefcase, ArrowRight, Check, Loader2 } from 'lucide-react'
 import type { Role } from '@/types'
-import { syncUser, updateUserRole } from '@/lib/data'
+import { api } from '@/lib/api'
 
 interface OnboardingProps {
   onComplete: () => void
@@ -14,7 +14,7 @@ type Step = 'welcome' | 'organization' | 'role'
 
 export function Onboarding({ onComplete }: OnboardingProps) {
   const { user } = useUser()
-  const { orgId } = useAuth()
+  const { orgId, getToken } = useAuth()
   const { createOrganization, setActive, userMemberships } = useOrganizationList({
     userMemberships: { infinite: true }
   })
@@ -58,16 +58,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setLoading(true)
     setError(null)
     try {
-      // Sync user first
-      await syncUser({
-        id: user.id,
-        orgId: orgId ?? null,
-        email: user.primaryEmailAddress?.emailAddress || '',
-        name: user.fullName || user.username || 'User',
-        avatarUrl: user.imageUrl ?? null,
-      })
-      // Then update role
-      await updateUserRole(user.id, role)
+      const token = await getToken()
+      if (token) {
+        api.setToken(token)
+      }
+      await api.getSession()
+      await api.updateUserRole(role)
       onComplete()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save role')

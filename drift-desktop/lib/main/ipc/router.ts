@@ -5,6 +5,16 @@ import { windowRegistry } from '@/lib/main/windowRegistry'
 import { createServer, Server } from 'http'
 import { parse } from 'url'
 
+// Persistent store for auth - lazy loaded
+let store: any = null
+const getStore = async () => {
+  if (!store) {
+    const Store = (await import('electron-store')).default
+    store = new Store<{ authToken?: string; userEmail?: string }>()
+  }
+  return store
+}
+
 // Drift Backend API URL
 const DRIFT_API_URL = 'https://34.185.148.16/api'
 
@@ -36,6 +46,9 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   /* ---------------- basic handlers ---------------- */
   ipcMain.handle('get-invisibility-state', () => getIsInvisible())
+  ipcMain.handle('shortcuts:get', () => shortcutsHelper.getShortcuts())
+  ipcMain.handle('shortcuts:set', (_evt, next) => shortcutsHelper.setShortcuts(next))
+  ipcMain.handle('shortcuts:reset', () => shortcutsHelper.resetShortcuts())
 
   ipcMain.on('quit-app', () => {
     import('electron').then(({ app }) => app.quit())
@@ -43,6 +56,13 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   ipcMain.on('set-current-input-value', (_event, value: string) => {
     setCurrentInputValue(value)
+  })
+
+  ipcMain.on('set-ignore-mouse-events', (_event, ignore: boolean) => {
+    const m = getMainWindow()
+    if (m && !m.isDestroyed()) {
+      m.setIgnoreMouseEvents(ignore, { forward: true })
+    }
   })
 
   ipcMain.on('input-changed', (_evt, value: string) => {
@@ -59,7 +79,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     }
 
     // Create callback server
-    authServer = createServer((req, res) => {
+    authServer = createServer(async (req, res) => {
       const urlParts = parse(req.url || '', true)
 
       if (urlParts.pathname === '/callback') {
@@ -67,8 +87,10 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         const email = urlParts.query.email as string
 
         if (token) {
-          ;(global as any).authToken = token
-          ;(global as any).userEmail = email || 'user@drift.app'
+          // Store persistently
+          const s = await getStore()
+          s.set('authToken', token)
+          s.set('userEmail', email || 'user@drift.app')
 
           res.writeHead(200, { 'Content-Type': 'text/html' })
           res.end(`
@@ -127,14 +149,20 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     })
   })
 
-  ipcMain.handle('store-auth-token', async (_evt, token: string) => {
-    // Store token securely (could use electron-store or keytar)
-    ;(global as any).authToken = token
+  ipcMain.handle('store-auth-token', async (_evt, token: string | null) => {
+    const s = await getStore()
+    if (token === null) {
+      s.delete('authToken')
+      s.delete('userEmail')
+    } else {
+      s.set('authToken', token)
+    }
     return true
   })
 
   ipcMain.handle('get-auth-token', async () => {
-    return (global as any).authToken || null
+    const s = await getStore()
+    return s.get('authToken') || null
   })
 
   /* ---------------- Chat handlers (connect to Drift backend) ---------------- */
@@ -164,7 +192,8 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       }
 
       // 2. Send to Drift backend
-      const authToken = (global as any).authToken
+      const s = await getStore()
+      const authToken = s.get('authToken')
       const response = await fetch(`${DRIFT_API_URL}/chat`, {
         method: 'POST',
         headers: {

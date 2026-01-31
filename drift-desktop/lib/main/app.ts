@@ -32,6 +32,17 @@ export function createAppWindow(isInvisible = false, t0: number): BrowserWindow 
   })
   
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  mainWindow.setAlwaysOnTop(true, 'screen-saver', 1)
+
+  // Re-focus when window loses focus to keep it on top
+  mainWindow.on('blur', () => {
+    // Small delay to allow click events to process first
+    setTimeout(() => {
+      if (!mainWindow.isDestroyed() && mainWindow.isVisible()) {
+        mainWindow.setAlwaysOnTop(true, 'screen-saver', 1)
+      }
+    }, 100)
+  })
 
   // Register IPC events for the main window.
   registerWindowIPC(mainWindow)
@@ -40,6 +51,15 @@ export function createAppWindow(isInvisible = false, t0: number): BrowserWindow 
     console.log('[perf] ready-to-show', (performance.now() - t0).toFixed(1), 'ms');
     mainWindow.show()
     mainWindow.focus()
+  })
+
+  // Debug: log when window loses focus
+  mainWindow.on('blur', () => {
+    console.log('[debug] Window lost focus (blur event)')
+  })
+
+  mainWindow.on('hide', () => {
+    console.log('[debug] Window hidden')
   })
 
   const lastTime = { value: t0 };

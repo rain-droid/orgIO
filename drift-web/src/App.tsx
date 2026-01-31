@@ -11,14 +11,7 @@ import {
 } from '@/components/ui/sidebar'
 import { Button } from '@/components/ui/button'
 import type { Brief, Submission, User, Role } from './types'
-import {
-  fetchBriefs,
-  createBrief,
-  deleteBrief,
-  fetchSubmissions,
-  updateSubmissionStatus,
-  fetchUser,
-} from './lib/data'
+import { api } from './lib/api'
 import { 
   ArrowRight, 
   Loader2, 
@@ -41,7 +34,7 @@ export default function App() {
   }
 
   const { isSignedIn, user: clerkUser } = useUser()
-  const { orgId } = useAuth()
+  const { orgId, getToken } = useAuth()
 
   const [briefs, setBriefs] = useState<Brief[]>([])
   const [submissions, setSubmissions] = useState<Submission[]>([])
@@ -62,19 +55,54 @@ export default function App() {
       return
     }
     const checkUser = async () => {
+      setCheckingUser(true)
       try {
-        const userData = await fetchUser(clerkUser.id)
-        if (!userData) {
+        const token = await getToken()
+        if (token) {
+          api.setToken(token)
+        }
+
+        const session = await api.getSession()
+        setDriftUser({
+          id: session.userId,
+          orgId: session.orgId,
+          email: session.email || '',
+          name: session.name || 'User',
+          avatarUrl: session.avatarUrl,
+          role: session.role,
+        })
+
+        if (session.isNew) {
           setNeedsOnboarding(true)
-        } else {
-          setDriftUser(userData)
-          const briefsData = await fetchBriefs(orgId)
-          setBriefs(briefsData)
-          if (briefsData.length > 0) {
-            const briefIds = briefsData.map(b => b.id)
-            const subsData = await fetchSubmissions(briefIds)
-            setSubmissions(subsData)
-          }
+          return
+        }
+
+        const briefsResponse = await api.listBriefs()
+        const briefsData = briefsResponse.briefs.map((brief) => ({
+          id: brief.id,
+          orgId: brief.orgId,
+          name: brief.name,
+          description: brief.description,
+          status: brief.status as Brief['status'],
+          createdBy: brief.createdBy,
+          content: null,
+        }))
+        setBriefs(briefsData)
+
+        if (briefsData.length > 0) {
+          const subsResponse = await api.listSubmissions()
+          const subsData = subsResponse.submissions.map((submission) => ({
+            id: submission.id,
+            briefId: submission.briefId,
+            userId: submission.userId,
+            userName: submission.userName,
+            role: submission.role as Role,
+            summaryLines: submission.summaryLines,
+            durationMinutes: submission.durationMinutes,
+            matchedTasks: submission.matchedTasks,
+            status: submission.status as Submission['status'],
+          }))
+          setSubmissions(subsData)
         }
       } catch {
         setNeedsOnboarding(true)
@@ -83,16 +111,36 @@ export default function App() {
       }
     }
     checkUser()
-  }, [isSignedIn, clerkUser, orgId])
+  }, [isSignedIn, clerkUser, orgId, getToken])
 
   const handleOnboardingComplete = async () => {
     if (!clerkUser || !orgId) return
     setNeedsOnboarding(false)
     setCheckingUser(true)
     try {
-      const userData = await fetchUser(clerkUser.id)
-      setDriftUser(userData)
-      const briefsData = await fetchBriefs(orgId)
+      const token = await getToken()
+      if (token) {
+        api.setToken(token)
+      }
+      const session = await api.getSession()
+      setDriftUser({
+        id: session.userId,
+        orgId: session.orgId,
+        email: session.email || '',
+        name: session.name || 'User',
+        avatarUrl: session.avatarUrl,
+        role: session.role,
+      })
+      const briefsResponse = await api.listBriefs()
+      const briefsData = briefsResponse.briefs.map((brief) => ({
+        id: brief.id,
+        orgId: brief.orgId,
+        name: brief.name,
+        description: brief.description,
+        status: brief.status as Brief['status'],
+        createdBy: brief.createdBy,
+        content: null,
+      }))
       setBriefs(briefsData)
     } finally {
       setCheckingUser(false)
@@ -103,14 +151,21 @@ export default function App() {
     if (!inputValue.trim() || !orgId || !clerkUser) return
     setLoading(true)
     try {
-      const newBrief = await createBrief({
-        orgId,
+      const newBrief = await api.createBrief({
         name: inputValue,
         description: '',
-        createdBy: clerkUser.id,
       })
-      setBriefs([newBrief, ...briefs])
-      setSelectedBrief(newBrief)
+      const mappedBrief: Brief = {
+        id: newBrief.id,
+        orgId: newBrief.orgId,
+        name: newBrief.name,
+        description: newBrief.description,
+        status: newBrief.status as Brief['status'],
+        createdBy: newBrief.createdBy,
+        content: null,
+      }
+      setBriefs([mappedBrief, ...briefs])
+      setSelectedBrief(mappedBrief)
       setInputValue('')
       setCurrentView('brief')
     } finally {
@@ -120,7 +175,7 @@ export default function App() {
 
   const handleDeleteBrief = async (briefId: string) => {
     try {
-      await deleteBrief(briefId)
+      await api.deleteBrief(briefId)
       setBriefs(briefs.filter(b => b.id !== briefId))
       if (selectedBrief?.id === briefId) {
         setSelectedBrief(null)
@@ -138,7 +193,7 @@ export default function App() {
   }
 
   const handleReview = async (subId: string, status: 'approved' | 'rejected') => {
-    await updateSubmissionStatus(subId, status)
+    await api.updateSubmission(subId, status)
     setSubmissions(submissions.map(s => s.id === subId ? { ...s, status } : s))
   }
 

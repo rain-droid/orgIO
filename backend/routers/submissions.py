@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Header, status, Query
 from datetime import datetime
-from models.schemas import SubmissionPayload, SubmissionResponse
+from typing import Dict, Any, Optional
+from models.schemas import SubmissionPayload
 from services.clerk_auth import get_current_user
 from services.supabase_client import get_supabase
 from services.agent_manager import get_agent_manager, AgentManager
@@ -9,7 +10,22 @@ from services.websocket_manager import get_websocket_manager
 router = APIRouter()
 
 
-@router.post("/submissions", response_model=SubmissionResponse, status_code=status.HTTP_201_CREATED)
+def _map_submission(submission: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": submission.get("id"),
+        "briefId": submission.get("brief_id"),
+        "userId": submission.get("user_id"),
+        "userName": submission.get("user_name"),
+        "role": submission.get("role"),
+        "summaryLines": submission.get("summary_lines") or [],
+        "durationMinutes": submission.get("duration_minutes") or 0,
+        "matchedTasks": submission.get("matched_tasks") or [],
+        "status": submission.get("status"),
+        "createdAt": submission.get("created_at")
+    }
+
+
+@router.post("/submissions", status_code=status.HTTP_201_CREATED)
 async def create_submission(
     payload: SubmissionPayload,
     authorization: str = Header(...),
@@ -132,19 +148,7 @@ async def create_submission(
         print(f"WebSocket broadcast error: {e}")
     
     # Return response
-    return SubmissionResponse(
-        id=submission["id"],
-        briefId=submission["brief_id"],
-        userId=submission["user_id"],
-        userName=submission["user_name"],
-        role=submission["role"],
-        summary=submission["summary_lines"],
-        duration=submission["duration_minutes"],
-        activities=payload.activities,
-        matchedTasks=submission["matched_tasks"],
-        status=submission["status"],
-        createdAt=submission["created_at"]
-    )
+    return _map_submission(submission)
 
 
 @router.get("/submissions/{submission_id}")
@@ -180,18 +184,50 @@ async def get_submission(
     activities_response = supabase.table("submission_activities").select("*").eq("submission_id", submission_id).execute()
     activities = activities_response.data or []
     
+    result = _map_submission(submission)
+    result["activities"] = activities
+    return result
+
+
+@router.get("/submissions")
+async def list_submissions(
+    authorization: str = Header(...),
+    status_filter: Optional[str] = Query(None, alias="status", regex="^(pending|approved|rejected)$"),
+    brief_id: Optional[str] = Query(None, alias="briefId"),
+    user_id: Optional[str] = Query(None, alias="userId"),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    """List submissions for the current organization"""
+    user = await get_current_user(authorization)
+    supabase = get_supabase()
+
+    query = supabase.table("submissions").select("*")
+
+    if status_filter:
+        query = query.eq("status", status_filter)
+    if brief_id:
+        query = query.eq("brief_id", brief_id)
+    if user_id:
+        query = query.eq("user_id", user_id)
+
+    query = query.limit(limit).offset(offset).order("created_at", desc=True)
+
+    response = query.execute()
+    submissions = response.data or []
+
+    if submissions:
+        brief_ids = list({sub["brief_id"] for sub in submissions if sub.get("brief_id")})
+        if brief_ids:
+            briefs_response = supabase.table("briefs").select("id, org_id").in_("id", brief_ids).execute()
+            allowed_brief_ids = {brief["id"] for brief in (briefs_response.data or []) if brief.get("org_id") == user["orgId"]}
+            submissions = [sub for sub in submissions if sub.get("brief_id") in allowed_brief_ids]
+
     return {
-        "id": submission["id"],
-        "briefId": submission["brief_id"],
-        "userId": submission["user_id"],
-        "userName": submission["user_name"],
-        "role": submission["role"],
-        "summary": submission["summary_lines"],
-        "duration": submission["duration_minutes"],
-        "activities": activities,
-        "matchedTasks": submission["matched_tasks"],
-        "status": submission["status"],
-        "createdAt": submission["created_at"]
+        "submissions": [_map_submission(sub) for sub in submissions],
+        "total": len(submissions),
+        "limit": limit,
+        "offset": offset
     }
 
 

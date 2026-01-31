@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import uvicorn
 
-from routers import auth, briefs, submissions
+from routers import auth, briefs, submissions, users
 from services.agent_manager import get_agent_manager
 from config.settings import settings
 
@@ -64,6 +64,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api", tags=["Authentication"])
 app.include_router(briefs.router, prefix="/api", tags=["Briefs"])
 app.include_router(submissions.router, prefix="/api", tags=["Submissions"])
+app.include_router(users.router, prefix="/api", tags=["Users"])
 
 
 # Health check endpoint

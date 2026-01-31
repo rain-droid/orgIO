@@ -13,10 +13,22 @@ interface SubmitWorkRequest {
   summary: string[]
   duration: number
   activities?: Array<{
-    timestamp: string
-    action: string
-    context?: string
+    app: string
+    title: string
+    summary: string
+    duration: number
+    timestamp: number
   }>
+}
+
+interface UserProfile {
+  userId: string
+  orgId: string | null
+  email: string | null
+  name: string | null
+  role: 'pm' | 'dev' | 'designer'
+  avatarUrl: string | null
+  isNew?: boolean
 }
 
 interface ViewContent {
@@ -69,15 +81,20 @@ class DriftAPI {
   async createBrief(request: CreateBriefRequest) {
     return this.fetch<{
       id: string
+      orgId: string
       name: string
       description: string
       status: string
+      createdBy: string
+      createdAt: string
       tasks: Array<{
         id: string
+        briefId: string
         role: string
         title: string
         description: string
         status: string
+        createdAt: string
       }>
     }>('/api/briefs', {
       method: 'POST',
@@ -89,15 +106,20 @@ class DriftAPI {
   async getBrief(briefId: string) {
     return this.fetch<{
       id: string
+      orgId: string
       name: string
       description: string
       status: string
+      createdBy: string
+      createdAt: string
       tasks: Array<{
         id: string
+        briefId: string
         role: string
         title: string
         description: string
         status: string
+        createdAt: string
       }>
     }>(`/api/briefs/${briefId}`)
   }
@@ -139,10 +161,12 @@ class DriftAPI {
     return this.fetch<{
       tasks: Array<{
         id: string
+        briefId: string
         role: string
         title: string
         description: string
         status: string
+        createdAt: string
       }>
       total: number
     }>(`/api/briefs/${briefId}/tasks${query}`)
@@ -152,20 +176,21 @@ class DriftAPI {
   async submitWork(request: SubmitWorkRequest) {
     return this.fetch<{
       id: string
-      brief_id: string
-      user_id: string
-      summary: string
-      matched_tasks: Array<{
-        task_id: string
-        confidence: number
-      }>
+      briefId: string
+      userId: string
+      userName: string
+      role: string
+      summaryLines: string[]
+      durationMinutes: number
+      matchedTasks: string[]
       status: string
+      createdAt: string
     }>('/api/submissions', {
       method: 'POST',
       body: JSON.stringify({
-        brief_id: request.briefId,
-        user_id: request.userId,
-        user_name: request.userName,
+        briefId: request.briefId,
+        userId: request.userId,
+        userName: request.userName,
         role: request.role,
         summary: request.summary,
         duration: request.duration,
@@ -178,11 +203,22 @@ class DriftAPI {
   async getSubmission(submissionId: string) {
     return this.fetch<{
       id: string
-      brief_id: string
-      user_id: string
-      summary: string
-      matched_tasks: Array<{ task_id: string; confidence: number }>
+      briefId: string
+      userId: string
+      userName: string
+      role: string
+      summaryLines: string[]
+      durationMinutes: number
+      matchedTasks: string[]
       status: string
+      createdAt: string
+      activities?: Array<{
+        app: string
+        title: string
+        summary: string
+        duration: number
+        timestamp: number
+      }>
     }>(`/api/submissions/${submissionId}`)
   }
 
@@ -195,6 +231,60 @@ class DriftAPI {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     })
+  }
+
+  async listBriefs() {
+    return this.fetch<{
+      briefs: Array<{
+        id: string
+        orgId: string
+        name: string
+        description: string
+        status: string
+        createdBy: string
+        createdAt: string
+      }>
+    }>('/api/briefs')
+  }
+
+  async deleteBrief(briefId: string) {
+    return this.fetch<{ id: string; deleted: boolean }>(`/api/briefs/${briefId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async listSubmissions(params?: {
+    status?: 'pending' | 'approved' | 'rejected'
+    briefId?: string
+    userId?: string
+    limit?: number
+    offset?: number
+  }) {
+    const search = new URLSearchParams()
+    if (params?.status) search.set('status', params.status)
+    if (params?.briefId) search.set('briefId', params.briefId)
+    if (params?.userId) search.set('userId', params.userId)
+    if (params?.limit) search.set('limit', String(params.limit))
+    if (params?.offset) search.set('offset', String(params.offset))
+    const query = search.toString() ? `?${search.toString()}` : ''
+
+    return this.fetch<{
+      submissions: Array<{
+        id: string
+        briefId: string
+        userId: string
+        userName: string
+        role: string
+        summaryLines: string[]
+        durationMinutes: number
+        matchedTasks: string[]
+        status: string
+        createdAt: string
+      }>
+      total: number
+      limit: number
+      offset: number
+    }>(`/api/submissions${query}`)
   }
 
   // Health check
@@ -222,6 +312,17 @@ class DriftAPI {
     })
     
     return this.getBriefView(brief.id, request.role)
+  }
+
+  async getSession() {
+    return this.fetch<UserProfile>('/api/users/me')
+  }
+
+  async updateUserRole(role: 'pm' | 'dev' | 'designer') {
+    return this.fetch<UserProfile>('/api/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    })
   }
 }
 

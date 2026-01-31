@@ -1,14 +1,112 @@
-import { X, Command, CornerDownLeft, Space, Eye, EyeOff, Circle } from 'lucide-react'
-import { useEffect, useState, useRef } from 'react'
+import { Command, CornerDownLeft, Space, GripVertical, LogOut, ChevronDown, FileText, Mic, Settings, Power } from 'lucide-react'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Button } from '../ui/button'
 import { useUIActor } from '../../state/UIStateProvider'
 import { useSelector } from '@xstate/react'
 
+type ShortcutAction = 'toggleOverlay' | 'submitChat' | 'toggleSession' | 'toggleVoice' | 'escape'
+type ShortcutConfig = Record<ShortcutAction, string>
+type ShortcutUpdateResult = { ok: boolean; failed: ShortcutAction[]; shortcuts: ShortcutConfig }
+
+// Mock projects - later from API
+const MOCK_PROJECTS = [
+  { id: '1', name: 'Apple Pay Checkout' },
+  { id: '2', name: 'User Onboarding Flow' },
+  { id: '3', name: 'Dashboard Redesign' },
+]
+
+// Voice Equalizer Component with real mic input
+function VoiceEqualizer({ isActive }: { isActive: boolean }) {
+  const [levels, setLevels] = useState([2, 2, 2])
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const animationRef = useRef<number | null>(null)
+
+  const analyze = useCallback(() => {
+    if (!analyserRef.current) return
+
+    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount)
+    analyserRef.current.getByteFrequencyData(dataArray)
+
+    // Voice frequency bands (roughly 85-255Hz, 255-500Hz, 500-2000Hz)
+    const low = dataArray.slice(2, 6).reduce((a, b) => a + b, 0) / 4
+    const mid = dataArray.slice(6, 12).reduce((a, b) => a + b, 0) / 6
+    const high = dataArray.slice(12, 24).reduce((a, b) => a + b, 0) / 12
+
+    // Scale to 2-10px range
+    const scale = (val: number) => Math.max(2, Math.min(10, (val / 255) * 12 + 2))
+    
+    setLevels([scale(low), scale(mid), scale(high)])
+    animationRef.current = requestAnimationFrame(analyze)
+  }, [])
+
+  useEffect(() => {
+    if (isActive) {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then((stream) => {
+          streamRef.current = stream
+          audioContextRef.current = new AudioContext()
+          analyserRef.current = audioContextRef.current.createAnalyser()
+          analyserRef.current.fftSize = 64
+          analyserRef.current.smoothingTimeConstant = 0.4
+
+          const source = audioContextRef.current.createMediaStreamSource(stream)
+          source.connect(analyserRef.current)
+          
+          analyze()
+        })
+        .catch((err) => console.error('Mic access denied:', err))
+    } else {
+      // Cleanup
+      if (animationRef.current) cancelAnimationFrame(animationRef.current)
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop())
+      if (audioContextRef.current) audioContextRef.current.close()
+      setLevels([2, 2, 2])
+    }
+
+    return () => {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current)
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop())
+      if (audioContextRef.current) audioContextRef.current.close()
+    }
+  }, [isActive, analyze])
+
+  return (
+    <div className="flex items-center gap-[2px] h-[10px]">
+      {levels.map((h, i) => (
+        <span
+          key={i}
+          className="w-[2px] bg-white/90 rounded-full transition-all duration-75"
+          style={{ height: `${h}px` }}
+        />
+      ))}
+    </div>
+  )
+}
+
 export const Mainbar = () => {
-  const [isInvisible, setIsInvisible] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
+  const [selectedProject, setSelectedProject] = useState<string | null>(null)
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 })
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false)
+  const [settingsPosition, setSettingsPosition] = useState({ top: 0, left: 0 })
+  const [showExitMenu, setShowExitMenu] = useState(false)
+  const [exitMenuPosition, setExitMenuPosition] = useState({ top: 0, left: 0 })
+  const [shortcuts, setShortcuts] = useState<ShortcutConfig | null>(null)
+  const [editingShortcut, setEditingShortcut] = useState<ShortcutAction | null>(null)
+  const [shortcutError, setShortcutError] = useState<string | null>(null)
+  const [isVoiceActive, setIsVoiceActive] = useState(false)
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const settingsRef = useRef<HTMLDivElement>(null)
+  const settingsButtonRef = useRef<HTMLButtonElement>(null)
+  const exitMenuRef = useRef<HTMLDivElement>(null)
+  const exitButtonRef = useRef<HTMLButtonElement>(null)
 
   const uiActor = useUIActor()
   const { send } = uiActor
@@ -17,13 +115,164 @@ export const Mainbar = () => {
     chatActive: s.matches('chat')
   }))
 
-  // Sync initial invisibility state from main process
+  const shortcutItems: { id: ShortcutAction; label: string }[] = [
+    { id: 'toggleOverlay', label: 'Show/Hide overlay' },
+    { id: 'submitChat', label: 'Open chat' },
+    { id: 'toggleSession', label: 'Start/Stop session' },
+    { id: 'toggleVoice', label: 'Toggle voice' },
+    { id: 'escape', label: 'Close/Back' }
+  ]
+
+  // Update dropdown position when opened
   useEffect(() => {
-    const updateState = (state: boolean) => setIsInvisible(state)
-    window.api.invoke('get-invisibility-state').then(updateState).catch(() => {})
-    window.api.receive('invisibility-state-changed', updateState)
-    return () => window.api.removeAllListeners('invisibility-state-changed')
+    if (showProjectDropdown && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        left: rect.left
+      })
+    }
+  }, [showProjectDropdown])
+
+  // Update settings menu position when opened
+  useEffect(() => {
+    if (showSettingsMenu && settingsButtonRef.current) {
+      const rect = settingsButtonRef.current.getBoundingClientRect()
+      setSettingsPosition({
+        top: rect.bottom + 8,
+        left: rect.right - 220
+      })
+    }
+  }, [showSettingsMenu])
+
+  // Update exit menu position when opened
+  useEffect(() => {
+    if (showExitMenu && exitButtonRef.current) {
+      const rect = exitButtonRef.current.getBoundingClientRect()
+      setExitMenuPosition({
+        top: rect.bottom + 8,
+        left: rect.right - 120
+      })
+    }
+  }, [showExitMenu])
+
+  // Close menus on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(target) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(target)
+      ) {
+        setShowProjectDropdown(false)
+      }
+      if (
+        settingsRef.current &&
+        !settingsRef.current.contains(target) &&
+        settingsButtonRef.current &&
+        !settingsButtonRef.current.contains(target)
+      ) {
+        setShowSettingsMenu(false)
+      }
+      if (
+        exitMenuRef.current &&
+        !exitMenuRef.current.contains(target) &&
+        exitButtonRef.current &&
+        !exitButtonRef.current.contains(target)
+      ) {
+        setShowExitMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  useEffect(() => {
+    window.api
+      .invoke('shortcuts:get')
+      .then((data: ShortcutConfig) => setShortcuts(data))
+      .catch(() => setShortcuts(null))
+  }, [])
+
+  useEffect(() => {
+    if (!editingShortcut) return
+
+    const toKeyPart = (key: string) => {
+      const aliasMap: Record<string, string> = {
+        ' ': 'Space',
+        Escape: 'Escape',
+        Enter: 'Enter',
+        Backspace: 'Backspace',
+        Delete: 'Delete',
+        Tab: 'Tab',
+        ArrowUp: 'Up',
+        ArrowDown: 'Down',
+        ArrowLeft: 'Left',
+        ArrowRight: 'Right'
+      }
+
+      if (aliasMap[key]) return aliasMap[key]
+      if (key.length === 1) return key.toUpperCase()
+      return key
+    }
+
+    const buildAccelerator = (event: KeyboardEvent) => {
+      const isModifierOnly = ['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)
+      if (isModifierOnly) return null
+
+      const keyPart = toKeyPart(event.key)
+      const hasModifier = event.ctrlKey || event.altKey || event.shiftKey || event.metaKey
+
+      if (!hasModifier && keyPart !== 'Escape') {
+        return null
+      }
+
+      const parts: string[] = []
+      if (event.ctrlKey || event.metaKey) parts.push('CommandOrControl')
+      if (event.altKey) parts.push('Alt')
+      if (event.shiftKey) parts.push('Shift')
+      parts.push(keyPart)
+
+      return parts.join('+')
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      event.preventDefault()
+      event.stopPropagation()
+
+      if (event.key === 'Escape' && editingShortcut !== 'escape') {
+        setEditingShortcut(null)
+        setShortcutError(null)
+        return
+      }
+
+      const accelerator = buildAccelerator(event)
+      if (!accelerator) {
+        setShortcutError('Use a modifier like Ctrl/Alt/Shift (except Escape).')
+        return
+      }
+
+      window.api
+        .invoke('shortcuts:set', { [editingShortcut]: accelerator })
+        .then((result: ShortcutUpdateResult) => {
+          if (!result.ok) {
+            setShortcutError('Shortcut invalid or already in use.')
+            return
+          }
+          setShortcuts(result.shortcuts)
+          setShortcutError(null)
+          setEditingShortcut(null)
+        })
+        .catch(() => {
+          setShortcutError('Failed to update shortcut.')
+        })
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [editingShortcut])
 
   // Recording timer
   useEffect(() => {
@@ -45,8 +294,37 @@ export const Mainbar = () => {
     }
   }, [isRecording])
 
+  // Listen for toggle-session shortcut
+  useEffect(() => {
+    const handleToggleSession = () => {
+      if (!selectedProject) {
+        // Shortcut should start immediately; default to first project
+        if (MOCK_PROJECTS.length > 0) {
+          setSelectedProject(MOCK_PROJECTS[0].id)
+        }
+        setShowProjectDropdown(false)
+      }
+      setIsRecording((prev) => !prev)
+    }
+    window.addEventListener('toggle-session', handleToggleSession)
+    return () => window.removeEventListener('toggle-session', handleToggleSession)
+  }, [selectedProject])
+
+  // Listen for toggle-voice shortcut
+  useEffect(() => {
+    const handleToggleVoice = () => {
+      setIsVoiceActive((prev) => !prev)
+    }
+    window.addEventListener('toggle-voice', handleToggleVoice)
+    return () => window.removeEventListener('toggle-voice', handleToggleVoice)
+  }, [])
+
   const handleChatClick = () => {
-    send({ type: 'OPEN_CHAT' })
+    if (chatActive) {
+      send({ type: 'ESC' })
+    } else {
+      send({ type: 'OPEN_CHAT' })
+    }
   }
 
   const formatTime = (seconds: number) => {
@@ -57,32 +335,176 @@ export const Mainbar = () => {
     return `${minutes}:${secs}`
   }
 
-  const handleRecordClick = () => {
+  const handleSessionClick = () => {
+    if (!isRecording && !selectedProject) {
+      if (MOCK_PROJECTS.length > 0) {
+        setSelectedProject(MOCK_PROJECTS[0].id)
+      }
+      setShowProjectDropdown(false)
+    }
     setIsRecording(!isRecording)
-    // TODO: Integrate with Drift backend for recording/work tracking
   }
 
-  const handleInvisibilityToggle = () => {
-    setIsInvisible((prevState) => !prevState)
-    window.api.send('toggle-invisibility')
+  const handleProjectSelect = (projectId: string) => {
+    setSelectedProject(projectId)
+    setShowProjectDropdown(false)
   }
+
+  const getSelectedProjectName = () => {
+    const project = MOCK_PROJECTS.find(p => p.id === selectedProject)
+    return project?.name || 'Select Project'
+  }
+
+  const handleLogout = () => {
+    window.api.invoke('store-auth-token', null)
+    window.location.reload()
+  }
+
+  const handleExit = () => {
+    window.api.send('quit-app')
+  }
+
+  const handleVoiceClick = () => {
+    setIsVoiceActive(!isVoiceActive)
+  }
+
+  const dropdownPortal = showProjectDropdown && createPortal(
+    <div 
+      ref={dropdownRef}
+      className="glass rounded-[8px] min-w-[200px] overflow-hidden py-1"
+      style={{
+        position: 'fixed',
+        top: dropdownPosition.top,
+        left: dropdownPosition.left,
+        zIndex: 9999
+      }}
+    >
+      {MOCK_PROJECTS.map((project) => (
+        <button
+          key={project.id}
+          onClick={() => handleProjectSelect(project.id)}
+          className={`w-full text-left px-2.5 py-1.5 text-xs flex items-center gap-2 hover:bg-black/5 transition-colors ${
+            selectedProject === project.id ? 'bg-black/5 font-medium' : ''
+          }`}
+        >
+          <FileText size={12} className="text-gray-500 flex-shrink-0" />
+          <span className="truncate">{project.name}</span>
+        </button>
+      ))}
+    </div>,
+    document.body
+  )
+
+  const settingsPortal = showSettingsMenu && createPortal(
+    <div
+      ref={settingsRef}
+      className="glass rounded-[8px] min-w-[220px] overflow-hidden py-1"
+      style={{
+        position: 'fixed',
+        top: settingsPosition.top,
+        left: settingsPosition.left,
+        zIndex: 9999
+      }}
+    >
+      <div className="px-2.5 py-1 text-[11px] uppercase tracking-wide text-gray-500">Shortcuts</div>
+      {shortcutItems.map((item) => {
+        const value = shortcuts?.[item.id] ?? 'Unassigned'
+        const isEditing = editingShortcut === item.id
+        return (
+          <div key={item.id} className="px-2.5 py-1.5 text-xs flex items-center justify-between gap-2">
+            <span className="text-gray-800">{item.label}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[11px] text-gray-500">{value}</span>
+              <button
+                onClick={() => {
+                  setShortcutError(null)
+                  setEditingShortcut(isEditing ? null : item.id)
+                }}
+                className="rounded-[6px] px-2 py-0.5 text-[11px] text-gray-700 hover:bg-black/5 transition-colors"
+              >
+                {isEditing ? 'Cancel' : 'Reassign'}
+              </button>
+            </div>
+          </div>
+        )
+      })}
+      {editingShortcut && (
+        <div className="px-2.5 py-1.5 text-[11px] text-gray-500">
+          Press keys now. Esc to cancel.
+        </div>
+      )}
+      {shortcutError && (
+        <div className="px-2.5 pb-1.5 text-[11px] text-red-500">{shortcutError}</div>
+      )}
+      <button
+        onClick={() => {
+          window.api
+            .invoke('shortcuts:reset')
+            .then((result: ShortcutUpdateResult) => {
+              if (result.ok) {
+                setShortcuts(result.shortcuts)
+              }
+            })
+        }}
+        className="w-full text-left px-2.5 py-1.5 text-xs text-gray-700 hover:bg-black/5 transition-colors"
+      >
+        Reset to defaults
+      </button>
+    </div>,
+    document.body
+  )
 
   return (
-    <div className="pl-3 pr-3 glass rounded-[8px] font-sans flex-none w-[33.333vw] h-[40px] max-w-[33.333vw] max-h-[40px]">
-      <div className="flex items-center justify-between w-full h-full">
-        {/* Left - Record, Chat, Hide aligned together */}
-        <div className="flex items-center gap-1 flex-1 justify-start">
+    <div className="pl-3 pr-3 glass rounded-[8px] font-sans flex-none h-[40px] max-h-[40px]">
+      <div className="flex items-center justify-between w-full h-full gap-2">
+        {/* Left - Voice, Session, Timer, Brief | Chat, Hide */}
+        <div className="flex items-center gap-1 justify-start">
+          {/* Voice Button with Equalizer */}
+          <Button
+            variant={isVoiceActive ? 'destructive' : 'ghost'}
+            size="xs"
+            onClick={handleVoiceClick}
+          >
+            {isVoiceActive ? (
+              <VoiceEqualizer isActive={isVoiceActive} />
+            ) : (
+              <Mic size={12} />
+            )}
+          </Button>
+
           <Button
             variant={isRecording ? 'destructive' : 'ghost'}
             size="xs"
-            onClick={handleRecordClick}
+            onClick={handleSessionClick}
           >
-            <Circle
-              className={isRecording ? 'animate-pulse text-red-500 fill-red-500' : ''}
-              size={12}
-            />
-            <span>{formatTime(recordingTime)}</span>
+            {isRecording && <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-1" />}
+            <span>{isRecording ? 'Stop' : 'Start Session'}</span>
           </Button>
+          
+          {isRecording && (
+            <span className="text-xs font-mono tabular-nums text-red-500 ml-1">{formatTime(recordingTime)}</span>
+          )}
+
+          {/* Project Selector */}
+          <Button
+            ref={buttonRef}
+            variant="ghost"
+            size="xs"
+            onClick={() => {
+              setShowProjectDropdown(!showProjectDropdown)
+              setShowSettingsMenu(false)
+            }}
+            className="max-w-[180px]"
+          >
+            <span className="truncate">{getSelectedProjectName()}</span>
+            <ChevronDown size={10} className={`transition-transform ${showProjectDropdown ? 'rotate-180' : ''}`} />
+          </Button>
+
+          {dropdownPortal}
+
+          {/* Separator */}
+          <div className="w-px h-4 bg-black/10 mx-1" />
+
           <Button
             variant={chatActive ? 'secondary' : 'ghost'}
             size="xs"
@@ -92,6 +514,7 @@ export const Mainbar = () => {
             <Command />
             <CornerDownLeft />
           </Button>
+          
           <Button variant="ghost" size="xs">
             <span>Hide</span>
             <Command />
@@ -99,24 +522,65 @@ export const Mainbar = () => {
           </Button>
         </div>
 
-        {/* Right - Invisibility Toggle and Quit */}
+        {/* Right - Drag, Logout */}
         <div className="flex items-center gap-1 justify-end">
           <Button
+            ref={settingsButtonRef}
             variant="ghost"
             size="xs"
-            onClick={handleInvisibilityToggle}
-            title={isInvisible ? 'Enable invisibility' : 'Disable invisibility'}
+            onClick={() => {
+              setShowSettingsMenu(!showSettingsMenu)
+              setShowProjectDropdown(false)
+            }}
+            title="Settings"
           >
-            {isInvisible ? <Eye /> : <EyeOff />}
+            <Settings size={14} />
           </Button>
+          {settingsPortal}
+          <div className="cursor-grab active:cursor-grabbing px-1" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+            <GripVertical size={16} className="text-gray-500" />
+          </div>
           <Button
+            ref={exitButtonRef}
             variant="ghost"
             size="xs"
-            onClick={() => window.api.send('quit-app')}
-            title="Quit App"
+            onClick={() => {
+              setShowExitMenu(!showExitMenu)
+              setShowSettingsMenu(false)
+              setShowProjectDropdown(false)
+            }}
+            title="Exit"
           >
-            <X />
+            <Power size={14} />
           </Button>
+          {showExitMenu && createPortal(
+            <div
+              ref={exitMenuRef}
+              className="glass rounded-[8px] min-w-[120px] overflow-hidden py-1"
+              style={{
+                position: 'fixed',
+                top: exitMenuPosition.top,
+                left: exitMenuPosition.left,
+                zIndex: 9999
+              }}
+            >
+              <button
+                onClick={handleLogout}
+                className="w-full text-left px-2.5 py-1.5 text-xs flex items-center gap-2 hover:bg-black/5 transition-colors"
+              >
+                <LogOut size={12} className="text-gray-500" />
+                <span>Logout</span>
+              </button>
+              <button
+                onClick={handleExit}
+                className="w-full text-left px-2.5 py-1.5 text-xs flex items-center gap-2 hover:bg-black/5 transition-colors text-red-600"
+              >
+                <Power size={12} />
+                <span>Exit</span>
+              </button>
+            </div>,
+            document.body
+          )}
         </div>
       </div>
     </div>

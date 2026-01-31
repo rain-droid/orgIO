@@ -54,21 +54,10 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const focusInput = () => {
         (window as any).chatInputAPI?.focus?.();
       };
-      const submitInput = () => {
-        (window as any).chatInputAPI?.submit?.();
-      };
 
-      // // If chat pane already open (machine in any chat.* state)
+      // If chat pane already open → close it
       if (snap.matches('chat')) {
-        if (!document.hasFocus()) {
-          // Window visible but not focused → focus input (window will receive focus automatically by the OS)
-          focusInput();
-        } else {
-          // Window focused → if idle or error, submit current input; otherwise ignore (e.g., during loading)
-          if (snap.matches({ chat: 'idle' }) || snap.matches({ chat: 'error' })) {
-            submitInput();
-          }
-        }
+        uiActor.send({ type: 'ESC' });
         return;
       }
 
@@ -81,8 +70,18 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const onEsc = () => uiActor.send({ type: 'ESC' });
 
+    const onToggleSession = () => {
+      window.dispatchEvent(new CustomEvent('toggle-session'));
+    };
+
+    const onToggleVoice = () => {
+      window.dispatchEvent(new CustomEvent('toggle-voice'));
+    };
+
     window.api.receive('shortcut:ctrl-enter', onCtrlEnter);
     window.api.receive('shortcut:esc', onEsc);
+    window.api.receive('shortcut:toggle-session', onToggleSession);
+    window.api.receive('shortcut:toggle-voice', onToggleVoice);
 
     return () => {
       unsub.unsubscribe();
@@ -92,6 +91,8 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
       window.api.removeAllListeners('live-audio-error');
       window.api.removeAllListeners('shortcut:ctrl-enter');
       window.api.removeAllListeners('shortcut:esc');
+      window.api.removeAllListeners('shortcut:toggle-session');
+      window.api.removeAllListeners('shortcut:toggle-voice');
     };
   }, []);
 
