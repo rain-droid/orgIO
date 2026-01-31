@@ -5,10 +5,8 @@ import {
   FileText,
   Home,
   Inbox,
-  LayoutDashboard,
   LifeBuoy,
   Send,
-  Settings2,
   Zap,
 } from "lucide-react"
 
@@ -25,7 +23,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import type { Brief } from "@/types"
+import type { Brief, Role } from "@/types"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   user?: {
@@ -35,8 +33,9 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   }
   briefs?: Brief[]
   onBriefSelect?: (brief: Brief) => void
-  onViewChange?: (view: 'dashboard' | 'briefs' | 'reviews') => void
+  onViewChange?: (view: 'home' | 'briefs' | 'reviews') => void
   currentView?: string
+  userRole?: Role
 }
 
 export function AppSidebar({ 
@@ -44,16 +43,17 @@ export function AppSidebar({
   briefs = [],
   onBriefSelect,
   onViewChange,
-  currentView = 'dashboard',
+  currentView = 'home',
+  userRole = 'dev',
   ...props 
 }: AppSidebarProps) {
   const navMain = [
     {
-      title: "Dashboard",
+      title: "Home",
       url: "#",
-      icon: LayoutDashboard,
-      isActive: currentView === 'dashboard',
-      onClick: () => onViewChange?.('dashboard'),
+      icon: Home,
+      isActive: currentView === 'home',
+      onClick: () => onViewChange?.('home'),
     },
     {
       title: "Briefs",
@@ -73,25 +73,6 @@ export function AppSidebar({
       icon: Inbox,
       isActive: currentView === 'reviews',
       onClick: () => onViewChange?.('reviews'),
-    },
-    {
-      title: "Settings",
-      url: "#",
-      icon: Settings2,
-      items: [
-        {
-          title: "General",
-          url: "#",
-        },
-        {
-          title: "Team",
-          url: "#",
-        },
-        {
-          title: "Notifications",
-          url: "#",
-        },
-      ],
     },
   ]
 
@@ -121,13 +102,15 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <a href="#">
-                <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <Home className="size-4" />
+              <a href="#" onClick={() => onViewChange?.('home')}>
+                <div className="bg-foreground text-background flex aspect-square size-8 items-center justify-center">
+                  <span className="font-bold text-sm">D</span>
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">Drift</span>
-                  <span className="truncate text-xs text-muted-foreground">Sprint Planning</span>
+                  <span className="truncate text-xs text-muted-foreground font-mono">
+                    {userRole.toUpperCase()} View
+                  </span>
                 </div>
               </a>
             </SidebarMenuButton>
