@@ -244,85 +244,76 @@ export default function App() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto p-6">
           {/* HOME VIEW */}
           {currentView === 'home' && (
-            <div className="min-h-full flex flex-col p-6 lg:p-10">
-              {/* Hero Section */}
-              <div className="flex-1 flex flex-col justify-center max-w-xl mx-auto w-full animate-slideUp">
-                <div className="space-y-1 mb-6">
-                  <h1 className="text-2xl font-semibold tracking-tight">What are we building?</h1>
-                  <p className="text-sm text-muted-foreground">
-                    AI generates {currentRole === 'pm' ? 'user stories & timeline' : currentRole === 'dev' ? 'architecture & API specs' : 'user flows & components'}
-                  </p>
-                </div>
-                
-                {/* Input */}
-                <div className="relative mb-8">
+            <div className="max-w-2xl animate-slideUp">
+              {/* Input Section */}
+              <div className="mb-6">
+                <h1 className="text-lg font-medium mb-1">What are we building?</h1>
+                <p className="text-xs text-muted-foreground mb-3">
+                  AI generates {currentRole === 'pm' ? 'user stories & timeline' : currentRole === 'dev' ? 'architecture & API specs' : 'user flows & components'}
+                </p>
+                <div className="relative">
                   <textarea
                     placeholder="Describe your feature..."
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleCreateBrief())}
-                    className="w-full h-24 p-4 bg-card border border-border rounded-md text-sm resize-none placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+                    className="w-full h-20 p-3 bg-card border border-border rounded-md text-sm resize-none placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
                   />
                   <Button
                     onClick={handleCreateBrief}
                     disabled={!inputValue.trim() || loading}
                     size="sm"
-                    className="absolute bottom-3 right-3"
+                    className="absolute bottom-2 right-2 h-7 text-xs"
                   >
-                    {loading ? <Loader2 className="size-3 animate-spin" /> : <>Create <ArrowRight className="ml-1.5 size-3" /></>}
+                    {loading ? <Loader2 className="size-3 animate-spin" /> : <>Create <ArrowRight className="ml-1 size-3" /></>}
                   </Button>
                 </div>
+              </div>
 
-                {/* Quick Stats */}
-                <div className="grid grid-cols-3 gap-3 mb-8">
-                  <button 
-                    onClick={() => setCurrentView('home')}
-                    className="p-3 text-left bg-card border border-border rounded-md hover:border-primary/50 transition-colors"
-                  >
-                    <div className="text-xl font-semibold">{briefs.filter(b => b.status === 'active').length}</div>
-                    <div className="text-xs text-muted-foreground">Active</div>
-                  </button>
-                  <button 
-                    onClick={() => setCurrentView('reviews')}
-                    className="p-3 text-left bg-card border border-border rounded-md hover:border-primary/50 transition-colors"
-                  >
-                    <div className="text-xl font-semibold">{submissions.filter(s => s.status === 'pending').length}</div>
-                    <div className="text-xs text-muted-foreground">Pending</div>
-                  </button>
-                  <div className="p-3 text-left bg-card border border-border rounded-md">
-                    <div className="text-xl font-semibold">{submissions.filter(s => s.status === 'approved').length}</div>
-                    <div className="text-xs text-muted-foreground">Approved</div>
+              {/* Quick Stats */}
+              <div className="flex gap-4 mb-6 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-emerald-500" />
+                  <span className="text-muted-foreground">{briefs.filter(b => b.status === 'active').length} active</span>
+                </div>
+                <button onClick={() => setCurrentView('reviews')} className="flex items-center gap-2 hover:text-primary transition-colors">
+                  <span className="size-2 rounded-full bg-yellow-500" />
+                  <span className="text-muted-foreground">{submissions.filter(s => s.status === 'pending').length} pending</span>
+                </button>
+                <div className="flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-primary" />
+                  <span className="text-muted-foreground">{submissions.filter(s => s.status === 'approved').length} approved</span>
+                </div>
+              </div>
+
+              {/* Recent Briefs */}
+              {briefs.length > 0 && (
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Recent Briefs</div>
+                  <div className="border border-border rounded-md divide-y divide-border">
+                    {briefs.slice(0, 5).map(brief => (
+                      <div
+                        key={brief.id}
+                        className="group flex items-center gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer transition-colors"
+                        onClick={() => handleBriefSelect(brief)}
+                      >
+                        <div className={`size-1.5 rounded-full ${brief.status === 'active' ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`} />
+                        <span className="flex-1 text-sm">{brief.name}</span>
+                        <span className="text-xs text-muted-foreground">{brief.status}</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm(brief.id); }}
+                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-all"
+                        >
+                          <Trash2 className="size-3 text-destructive" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
-
-                {/* Recent Briefs */}
-                {briefs.length > 0 && (
-                  <div>
-                    <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Recent</div>
-                    <div className="space-y-1">
-                      {briefs.slice(0, 4).map(brief => (
-                        <div
-                          key={brief.id}
-                          className="group flex items-center gap-3 p-2.5 hover:bg-muted/50 rounded-md cursor-pointer transition-colors"
-                          onClick={() => handleBriefSelect(brief)}
-                        >
-                          <div className={`size-1.5 rounded-full ${brief.status === 'active' ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`} />
-                          <span className="flex-1 text-sm truncate">{brief.name}</span>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setDeleteConfirm(brief.id); }}
-                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-all"
-                          >
-                            <Trash2 className="size-3 text-destructive" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           )}
 
