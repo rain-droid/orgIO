@@ -5,478 +5,229 @@
 }
 
 :root {
-  --bg: #0a0a0b;
-  --surface: #18181b;
-  --surface-hover: #27272a;
-  --border: #3f3f46;
+  --bg: rgba(9, 9, 11, 0.85);
+  --bg-solid: rgb(9, 9, 11);
+  --surface: rgba(24, 24, 27, 0.9);
+  --border: rgba(63, 63, 70, 0.5);
   --text: #fafafa;
   --text-muted: #a1a1aa;
-  --accent: #6366f1;
-  --accent-glow: rgba(99, 102, 241, 0.4);
-  --success: #22c55e;
+  --primary: #3b82f6;
   --danger: #ef4444;
+  --radius: 10px;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+html, body, #root {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
   background: transparent;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
-  overflow: hidden;
+  user-select: none;
 }
 
 /* ============================================
-   LOGIN SCREEN - FULL WINDOW
+   CONTAINER
    ============================================ */
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+}
 
-.login-screen {
-  width: 100vw;
-  height: 100vh;
+/* ============================================
+   MAIN BAR
+   ============================================ */
+.bar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  position: relative;
+  gap: 6px;
+  padding: 8px 10px;
   background: var(--bg);
-}
-
-.login-bg {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-}
-
-.login-gradient {
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle at 30% 30%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
-              radial-gradient(circle at 70% 70%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
-  animation: gradient-rotate 20s linear infinite;
-}
-
-@keyframes gradient-rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.login-content {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 40px;
-}
-
-.login-logo {
-  width: 100px;
-  height: 100px;
-  border-radius: 28px;
-  background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 24px;
-  box-shadow: 0 20px 60px var(--accent-glow);
-}
-
-.login-logo svg {
-  width: 50px;
-  height: 50px;
-  color: white;
-}
-
-.login-title {
-  font-size: 42px;
-  font-weight: 800;
-  letter-spacing: -1px;
-  margin-bottom: 8px;
-  background: linear-gradient(135deg, #fff 0%, #a1a1aa 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.login-subtitle {
-  font-size: 16px;
-  color: var(--text-muted);
-  margin-bottom: 40px;
-}
-
-.login-btn {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 36px;
-  background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
-  color: white;
-  border: none;
-  border-radius: 14px;
-  font-size: 17px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-  box-shadow: 0 8px 32px var(--accent-glow);
-}
-
-.login-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 40px var(--accent-glow);
-}
-
-.login-btn svg {
-  width: 20px;
-  height: 20px;
-}
-
-.login-btn svg.spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.login-btn:disabled {
-  opacity: 0.7;
-  cursor: wait;
-}
-
-.login-hint {
-  margin-top: 20px;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.login-divider {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin: 24px 0;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
-.login-divider::before,
-.login-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
-
-.login-btn-secondary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  padding: 14px 24px;
-  background: var(--surface);
-  color: var(--text);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  font-size: 15px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
 }
 
-.login-btn-secondary:hover {
-  background: var(--surface-hover);
-  border-color: var(--accent);
-}
-
-.login-btn-secondary svg {
-  width: 18px;
-  height: 18px;
-  color: var(--accent);
-}
-
-/* ============================================
-   FLOATING APP - CLUELY STYLE
-   ============================================ */
-
-.floating-app {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* Main Floating Bar */
-.floating-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 50px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
-}
-
-/* Status Indicator */
-.bar-status {
-  display: flex;
-  align-items: center;
-  padding: 0 4px;
-}
-
-.status-recording {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.rec-dot {
-  width: 10px;
-  height: 10px;
-  background: var(--danger);
+/* Recording Indicator */
+.indicator {
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.4;
+  flex-shrink: 0;
+}
+
+.indicator.recording {
+  background: var(--danger);
+  opacity: 1;
   animation: pulse 1.5s ease-in-out infinite;
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-  50% { opacity: 0.8; box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
 }
 
-.rec-time {
-  font-size: 14px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-  min-width: 45px;
-}
-
-.status-idle .idle-dot {
-  width: 10px;
-  height: 10px;
-  background: var(--text-muted);
-  border-radius: 50%;
-  opacity: 0.5;
-}
-
-/* Action Button */
-.bar-action {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 20px;
-  background: var(--accent);
-  color: white;
+/* Buttons */
+.btn {
+  padding: 6px 14px;
   border: none;
-  border-radius: 50px;
-  font-size: 14px;
+  border-radius: 6px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
+  white-space: nowrap;
 }
 
-.bar-action:hover {
-  background: #818cf8;
+.btn.primary {
+  background: var(--primary);
+  color: white;
 }
 
-.bar-action.recording {
-  background: var(--danger);
+.btn.primary:hover {
+  filter: brightness(1.15);
 }
 
-.bar-action.recording:hover {
-  background: #f87171;
+.btn.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-.bar-action svg {
-  width: 16px;
-  height: 16px;
+.btn.stop {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
-/* Menu Button */
-.bar-menu {
-  display: flex;
-  align-items: center;
+.btn.stop:hover {
+  background: rgba(39, 39, 42, 1);
 }
 
-.menu-btn {
-  width: 36px;
-  height: 36px;
+/* Icon Buttons */
+.icon-btn {
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: 50%;
+  border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.1s;
+  flex-shrink: 0;
 }
 
-.menu-btn:hover {
-  background: var(--surface-hover);
+.icon-btn:hover {
+  background: var(--surface);
   color: var(--text);
 }
 
-.menu-btn svg {
-  width: 18px;
-  height: 18px;
+.icon-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Divider */
+.divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 2px;
 }
 
 /* ============================================
-   BRIEF DROPDOWN
+   SETTINGS PANEL
    ============================================ */
-
-.brief-dropdown {
-  background: var(--surface);
+.panel {
+  background: var(--bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: slideIn 0.15s ease-out;
 }
 
-.dropdown-header {
-  padding: 12px 16px;
-  font-size: 11px;
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.panel-section {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-section:last-child {
+  border-bottom: none;
+}
+
+.panel-label {
+  padding: 4px 12px 8px;
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-muted);
-  border-bottom: 1px solid var(--border);
 }
 
-.dropdown-item {
+.panel-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 12px 16px;
+  padding: 8px 12px;
   background: transparent;
   border: none;
   color: var(--text);
-  font-size: 14px;
+  font-size: 12px;
   text-align: left;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.1s;
 }
 
-.dropdown-item:hover {
-  background: var(--surface-hover);
-}
-
-.dropdown-item.selected {
-  background: rgba(99, 102, 241, 0.1);
-  color: var(--accent);
-}
-
-.dropdown-item svg {
-  width: 16px;
-  height: 16px;
-  color: var(--accent);
-}
-
-/* ============================================
-   ACTIVITY PANEL
-   ============================================ */
-
-.activity-panel {
+.panel-item:hover {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
-.panel-header {
+.panel-item.selected {
+  color: var(--primary);
+}
+
+.panel-item svg {
+  width: 12px;
+  height: 12px;
+  color: var(--primary);
+}
+
+/* Shortcuts */
+.shortcut {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-}
-
-.panel-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.panel-title svg {
-  width: 14px;
-  height: 14px;
-  color: var(--accent);
-}
-
-.ai-tag {
-  padding: 3px 8px;
-  background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
-  color: white;
-  border-radius: 6px;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.panel-activities {
-  padding: 8px 0;
-  max-height: 120px;
-  overflow-y: auto;
-}
-
-.activity-empty {
-  padding: 16px;
-  text-align: center;
-  font-size: 13px;
+  padding: 6px 12px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
-.activity-item {
+.keys {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 16px;
-  font-size: 13px;
+  gap: 4px;
+}
+
+.key {
+  padding: 2px 6px;
+  background: var(--surface);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
   color: var(--text);
-  animation: slideIn 0.3s ease-out;
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.activity-dot {
-  width: 6px;
-  height: 6px;
-  background: var(--success);
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-/* ============================================
-   SCROLLBAR
-   ============================================ */
-
-::-webkit-scrollbar {
-  width: 4px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 2px;
 }

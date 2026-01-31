@@ -1,0 +1,11 @@
+node_modules
+dist
+out
+.DS_Store
+*.log*
+temp
+.windsurf*
+.env
+
+# Ignore native addon build artifacts
+native/screen_protection/build

@@ -1,0 +1,48 @@
+@import './globals.css';
+@import './window.css';
+
+/* Ensure custom window frame is transparent */
+.window-frame {
+  background-color: transparent !important;
+}
+
+.glass {
+  background-color: rgba(255, 255, 255, .71);
+  border: 1px solid rgba(255, 255, 255, .71);
+}
+
+html, body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  margin: 0;
+  overflow: hidden;
+  color: rgba(0,0,0,1)
+}
+
+/* Modern Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  /* line-height: 1.4; */
+}

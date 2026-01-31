@@ -13,15 +13,18 @@
     "windows": [
       {
         "title": "Drift",
-        "width": 380,
-        "height": 500,
-        "minWidth": 320,
-        "minHeight": 200,
-        "resizable": true,
+        "width": 320,
+        "height": 250,
+        "minWidth": 280,
+        "minHeight": 50,
+        "resizable": false,
         "fullscreen": false,
-        "center": true,
-        "decorations": true,
-        "alwaysOnTop": false
+        "x": 80,
+        "y": 30,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true
       }
     ],
     "security": {

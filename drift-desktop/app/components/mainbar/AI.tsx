@@ -1,0 +1,175 @@
+import { useState, useEffect, useRef } from 'react'
+import { useSelector } from '@xstate/react'
+import { useUIActor } from '../../state/UIStateProvider'
+import { Input } from '../ui/input'
+import { Command, CornerDownLeft } from 'lucide-react'
+import MarkdownRenderer from '../MarkdownRenderer'
+
+interface AIProps {
+  isChatPaneVisible: boolean
+  onContentChange?: (isWide: boolean) => void
+}
+
+export const AI: React.FC<AIProps> = ({ isChatPaneVisible, onContentChange }) => {
+  const actor = useUIActor()
+  const { send } = actor
+
+  const { state, isChatIdle, isChatLoading, isChatError } = useSelector(actor, (s) => ({
+    state: s,
+    isChatIdle: s.matches({ chat: 'idle' }),
+    isChatLoading: s.matches({ chat: 'loading' }),
+    isChatError: s.matches({ chat: 'error' })
+  }))
+
+  const [answer, setAnswer] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [inputValue, setInputValue] = useState<string>('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (state.matches('activeIdle')) {
+      setAnswer(null)
+      setErrorMessage(null)
+      setInputValue('')
+    } else if (isChatLoading) {
+      setAnswer('')
+      setErrorMessage(null)
+    }
+  }, [state, isChatLoading])
+
+  useEffect(() => {
+    const handleStreamChunk = (chunk: { text?: string; reset?: boolean }) => {
+      if (chunk.reset) {
+        setAnswer('')
+        return
+      }
+
+      if (!chunk.text) return
+
+      setAnswer((prev) => {
+        const base = prev || ''
+        const newAnswer = base + chunk.text
+        const containsCode = /```/.test(newAnswer)
+        const wordCount = newAnswer.split(/\s+/).filter(Boolean).length
+        const shouldBeWide = containsCode || wordCount > 100
+        onContentChange?.(shouldBeWide)
+        return newAnswer
+      })
+    }
+
+    const handleApiError = (error: string) => setErrorMessage(error)
+    const handleApiSuccess = () => {
+      // API request succeeded
+    }
+    const handleSetInitialInput = (value: string) => setInputValue(value)
+
+    // Expose focus and send helpers for global shortcuts
+    ;(window as any).chatInputAPI = {
+      focus: () => {
+        inputRef.current?.focus()
+      },
+      submit: () => {
+        const val = inputRef.current?.value.trim() || ''
+        if (!isChatLoading && val) {
+          send({ type: 'SUBMIT', value: val })
+          setInputValue('')
+        }
+      }
+    }
+
+    window.api.receive('chat:chunk', handleStreamChunk as any)
+    window.api.receive('api-error', handleApiError)
+    window.api.receive('api-success', handleApiSuccess)
+    window.api.receive('set-initial-input', handleSetInitialInput)
+
+    return () => {
+      window.api.removeAllListeners('chat:chunk')
+      delete (window as any).chatInputAPI
+      window.api.removeAllListeners('api-error')
+      window.api.removeAllListeners('api-success')
+      window.api.removeAllListeners('set-initial-input')
+    }
+  }, [send, isChatLoading, onContentChange])
+
+  useEffect(() => {
+    if (isChatPaneVisible && (isChatIdle || isChatError)) {
+      inputRef.current?.focus()
+    }
+  }, [isChatPaneVisible, isChatIdle, isChatError])
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value)
+  }
+
+  const renderChatContent = () => {
+    if (isChatError) {
+      return (
+        <div className="flex-1 flex items-center justify-center p-4 text-red-500 glass rounded-lg">
+          {errorMessage || 'An error occurred.'}
+        </div>
+      )
+    }
+
+    if (errorMessage) {
+      return (
+        <div className="flex-1 flex items-center justify-center p-4 text-red-500 glass rounded-lg">
+          {errorMessage}
+        </div>
+      )
+    }
+
+    if (isChatLoading && !answer) {
+      return (
+        <div className="flex-1 p-4 glass rounded-lg animate-pulse">Loading from Drift AI...</div>
+      )
+    }
+
+    if (answer) {
+      return (
+        <div className="flex-1 p-4 glass rounded-lg overflow-y-auto ">
+          <MarkdownRenderer content={answer} />
+        </div>
+      )
+    }
+
+    return (
+      <div className="flex-1 flex items-center justify-center p-4 glass rounded-lg text-gray-500">
+        Ask Drift anything...
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex max-h-full w-full bg-transparent p-2 gap-3">
+      {/* Chat Panel */}
+      <div className="flex-1 flex flex-col h-full gap-2 min-w-0 text-sm">
+        {/* Chat Content */}
+        {renderChatContent()}
+
+        {/* Input Area */}
+        <div className="relative max-h-10 flex-shrink-0">
+          <Input
+            ref={inputRef}
+            value={inputValue}
+            onChange={handleInputChange}
+            placeholder={
+              isChatLoading
+                ? 'Generating answer...'
+                : answer
+                  ? 'Ask a follow-up...'
+                  : 'Ask me anything...'
+            }
+            className="glass rounded-full w-full mr-14"
+            disabled={isChatLoading}
+          />
+          <div className="absolute right-4 top-1/2 -translate-y-1/2">
+            <div className="flex gap-2 items-center">
+              <Command className="size-4" />
+              <CornerDownLeft className="size-4" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
