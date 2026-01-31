@@ -104,10 +104,29 @@ class DriftAPI {
 
   // Get role-specific view content (Generative UI)
   async getBriefView(briefId: string, role: 'pm' | 'dev' | 'designer') {
-    return this.fetch<{
+    const response = await this.fetch<{
       role: string
-      content: ViewContent
+      components: Array<{
+        type: string
+        data: unknown
+      }>
     }>(`/api/briefs/${briefId}/view?role=${role}`)
+    
+    // Transform components array to flat content object for frontend compatibility
+    const content: ViewContent = {}
+    for (const comp of response.components) {
+      if (comp.type === 'kanban') content.tasks = comp.data as ViewContent['tasks']
+      else if (comp.type === 'user_stories') content.user_stories = comp.data as ViewContent['user_stories']
+      else if (comp.type === 'timeline') content.timeline = comp.data as ViewContent['timeline']
+      else if (comp.type === 'architecture') content.architecture = comp.data as ViewContent['architecture']
+      else if (comp.type === 'api_specs') content.api_endpoints = comp.data as ViewContent['api_endpoints']
+      else if (comp.type === 'code_examples') content.code_snippets = comp.data as ViewContent['code_snippets']
+      else if (comp.type === 'user_flow') content.user_flow = comp.data as ViewContent['user_flow']
+      else if (comp.type === 'components') content.components = comp.data as ViewContent['components']
+      else if (comp.type === 'states') content.states = comp.data as ViewContent['states']
+    }
+    
+    return { role: response.role, content }
   }
 
   // Get tasks for a brief
