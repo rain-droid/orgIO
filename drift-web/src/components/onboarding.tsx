@@ -80,7 +80,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const existingOrgs = userMemberships?.data || []
 
   return (
-    <div className="dark min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
         {/* Progress */}
         <div className="flex items-center justify-center gap-2 mb-8">

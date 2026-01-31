@@ -193,7 +193,7 @@ export default function App() {
   // Not signed in
   if (!isSignedIn) {
     return (
-      <div className="dark min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-6">
           <div className="flex items-center justify-center gap-3">
             <div className="bg-primary text-primary-foreground flex aspect-square size-12 items-center justify-center rounded-xl">
@@ -215,7 +215,7 @@ export default function App() {
   // Loading
   if (checkingUser) {
     return (
-      <div className="dark min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="size-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-muted-foreground">Loading...</p>
@@ -230,7 +230,7 @@ export default function App() {
   }
 
   return (
-    <div className="dark">
+    <div>
       <SidebarProvider>
         <AppSidebar 
           user={userData}
@@ -595,7 +595,7 @@ export default function App() {
                             </div>
                           )}
                           {selectedBrief.content.componentSpec && selectedBrief.content.componentSpec.length > 0 && (
-                            <div>
+      <div>
                               <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">Components</h3>
                               <div className="grid gap-2 md:grid-cols-2">
                                 {selectedBrief.content.componentSpec.map((comp, i) => (
@@ -617,10 +617,10 @@ export default function App() {
                   {!selectedBrief.content && (
                     <div className="text-center text-muted-foreground py-8">
                       No content available for this brief yet.
-                    </div>
+      </div>
                   )}
-                </div>
-              </>
+      </div>
+    </>
             )}
           </div>
         </SidebarInset>
