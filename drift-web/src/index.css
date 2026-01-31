@@ -44,9 +44,9 @@
   --sidebar-border: #27272A;
   --sidebar-ring: #3B82F6;
   
-  --font-sans: 'Geist Mono', ui-monospace, monospace;
-  --font-serif: 'Geist Mono', ui-monospace, monospace;
-  --font-mono: 'Geist Mono', ui-monospace, monospace;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-serif: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --radius: 0.5rem;
   
   --shadow-2xs: none;

@@ -178,9 +178,15 @@ export default function App() {
     avatar: clerkUser.imageUrl,
   } : undefined
 
-  const roleIcon = currentRole === 'pm' ? LayoutGrid : currentRole === 'dev' ? Code : Palette
   const roleColor = currentRole === 'pm' ? 'text-blue-400' : currentRole === 'dev' ? 'text-emerald-400' : 'text-violet-400'
   const roleBg = currentRole === 'pm' ? 'bg-blue-500/10' : currentRole === 'dev' ? 'bg-emerald-500/10' : 'bg-violet-500/10'
+  
+  const RoleIcon = () => {
+    const iconClass = `size-3.5 ${roleColor}`
+    if (currentRole === 'pm') return <LayoutGrid className={iconClass} />
+    if (currentRole === 'dev') return <Code className={iconClass} />
+    return <Palette className={iconClass} />
+  }
 
   // Not signed in
   if (!isSignedIn) {
@@ -229,7 +235,7 @@ export default function App() {
           <SidebarTrigger className="size-8" />
           <div className="flex-1" />
           <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${roleBg}`}>
-            {roleIcon({ className: `size-3.5 ${roleColor}` })}
+            <RoleIcon />
             <span className={`text-xs font-medium ${roleColor}`}>{currentRole.toUpperCase()}</span>
           </div>
           <div className="ml-4">
