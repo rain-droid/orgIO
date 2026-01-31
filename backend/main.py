@@ -51,6 +51,8 @@ app.add_middleware(
         "tauri://localhost",          # Tauri desktop app
         "https://drift.app",          # Production domain
         "https://*.drift.app",        # Subdomains
+        "https://34.185.148.16",      # GCP Production
+        "http://34.185.148.16",       # GCP Production (HTTP)
     ],
     allow_credentials=True,
     allow_methods=["*"],
