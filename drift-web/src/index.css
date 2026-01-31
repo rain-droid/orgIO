@@ -4,42 +4,51 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: rgb(255, 255, 255);
-  --foreground: rgb(10, 10, 10);
-  --card: rgb(255, 255, 255);
-  --card-foreground: rgb(10, 10, 10);
-  --popover: rgb(255, 255, 255);
-  --popover-foreground: rgb(10, 10, 10);
-  --primary: rgb(6, 148, 223);
-  --primary-foreground: rgb(250, 250, 250);
-  --secondary: rgb(245, 245, 245);
-  --secondary-foreground: rgb(23, 23, 23);
-  --muted: rgb(245, 245, 245);
-  --muted-foreground: rgb(113, 113, 113);
-  --accent: rgb(245, 245, 245);
-  --accent-foreground: rgb(23, 23, 23);
-  --destructive: rgb(231, 0, 11);
-  --destructive-foreground: rgb(245, 245, 245);
-  --border: rgb(229, 229, 229);
-  --input: rgb(229, 229, 229);
-  --ring: rgb(161, 161, 161);
-  --chart-1: rgb(34, 197, 94);
-  --chart-2: rgb(59, 130, 246);
-  --chart-3: rgb(249, 115, 22);
-  --chart-4: rgb(168, 85, 247);
-  --chart-5: rgb(236, 72, 153);
-  --sidebar: rgb(250, 250, 250);
-  --sidebar-foreground: rgb(10, 10, 10);
-  --sidebar-primary: rgb(23, 23, 23);
-  --sidebar-primary-foreground: rgb(250, 250, 250);
-  --sidebar-accent: rgb(245, 245, 245);
-  --sidebar-accent-foreground: rgb(23, 23, 23);
-  --sidebar-border: rgb(229, 229, 229);
-  --sidebar-ring: rgb(161, 161, 161);
-  --font-sans: 'Geist Mono', monospace;
-  --font-serif: 'Geist Mono', monospace;
-  --font-mono: 'Geist Mono', monospace;
-  --radius: 0rem;
+  --background: #09090B;
+  --foreground: #FAFAFA;
+  --card: #141416;
+  --card-foreground: #FAFAFA;
+  --popover: #141416;
+  --popover-foreground: #FAFAFA;
+  --primary: #3B82F6;
+  --primary-foreground: #FFFFFF;
+  --secondary: #1F1F23;
+  --secondary-foreground: #FAFAFA;
+  --muted: #1F1F23;
+  --muted-foreground: #71717A;
+  --accent: #1F1F23;
+  --accent-foreground: #FAFAFA;
+  --destructive: #EF4444;
+  --destructive-foreground: #FAFAFA;
+  --border: #27272A;
+  --input: #27272A;
+  --ring: #3B82F6;
+  
+  /* Role colors */
+  --role-pm: #3B82F6;
+  --role-dev: #10B981;
+  --role-designer: #8B5CF6;
+  
+  --chart-1: #10B981;
+  --chart-2: #3B82F6;
+  --chart-3: #F59E0B;
+  --chart-4: #8B5CF6;
+  --chart-5: #EC4899;
+  
+  --sidebar: #0F0F11;
+  --sidebar-foreground: #FAFAFA;
+  --sidebar-primary: #3B82F6;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #1F1F23;
+  --sidebar-accent-foreground: #FAFAFA;
+  --sidebar-border: #27272A;
+  --sidebar-ring: #3B82F6;
+  
+  --font-sans: 'Geist Mono', ui-monospace, monospace;
+  --font-serif: 'Geist Mono', ui-monospace, monospace;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+  --radius: 0.5rem;
+  
   --shadow-2xs: none;
   --shadow-xs: none;
   --shadow-sm: none;
@@ -48,43 +57,6 @@
   --shadow-lg: none;
   --shadow-xl: none;
   --shadow-2xl: none;
-  --tracking-normal: 0em;
-  --spacing: 0.25rem;
-}
-
-.dark {
-  --background: rgb(18, 18, 18);
-  --foreground: rgb(245, 245, 245);
-  --card: rgb(28, 28, 28);
-  --card-foreground: rgb(245, 245, 245);
-  --popover: rgb(28, 28, 28);
-  --popover-foreground: rgb(245, 245, 245);
-  --primary: rgb(96, 165, 250);
-  --primary-foreground: rgb(10, 10, 10);
-  --secondary: rgb(38, 38, 38);
-  --secondary-foreground: rgb(245, 245, 245);
-  --muted: rgb(38, 38, 38);
-  --muted-foreground: rgb(163, 163, 163);
-  --accent: rgb(38, 38, 38);
-  --accent-foreground: rgb(245, 245, 245);
-  --destructive: rgb(239, 68, 68);
-  --destructive-foreground: rgb(245, 245, 245);
-  --border: rgb(55, 55, 55);
-  --input: rgb(55, 55, 55);
-  --ring: rgb(96, 165, 250);
-  --chart-1: rgb(74, 222, 128);
-  --chart-2: rgb(96, 165, 250);
-  --chart-3: rgb(251, 146, 60);
-  --chart-4: rgb(192, 132, 252);
-  --chart-5: rgb(244, 114, 182);
-  --sidebar: rgb(14, 14, 14);
-  --sidebar-foreground: rgb(245, 245, 245);
-  --sidebar-primary: rgb(96, 165, 250);
-  --sidebar-primary-foreground: rgb(10, 10, 10);
-  --sidebar-accent: rgb(38, 38, 38);
-  --sidebar-accent-foreground: rgb(245, 245, 245);
-  --sidebar-border: rgb(55, 55, 55);
-  --sidebar-ring: rgb(96, 165, 250);
 }
 
 @theme inline {
@@ -129,26 +101,47 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-
-  --shadow-2xs: var(--shadow-2xs);
-  --shadow-xs: var(--shadow-xs);
-  --shadow-sm: var(--shadow-sm);
-  --shadow: var(--shadow);
-  --shadow-md: var(--shadow-md);
-  --shadow-lg: var(--shadow-lg);
-  --shadow-xl: var(--shadow-xl);
-  --shadow-2xl: var(--shadow-2xl);
-
-  --tracking-normal: var(--tracking-normal);
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
-    letter-spacing: var(--tracking-normal);
   }
 }
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272A;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3F3F46;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.animate-fadeIn { animation: fadeIn 300ms ease; }
+.animate-slideUp { animation: slideUp 300ms ease; }
+.animate-pulse { animation: pulse 2s infinite; }

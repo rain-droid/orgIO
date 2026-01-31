@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # Frontend (React + Vite)
+  drift-web:
+    build:
+      context: ./drift-web
+      dockerfile: Dockerfile
+      args:
+        - VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY}
+        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+        - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "80:80"
+    depends_on:
+      - drift-backend
+    networks:
+      - drift-network
+
+  # Backend (FastAPI + AI Agents)
+  drift-backend:
+    build:
+      context: ./drift-backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - CLERK_ISSUER=${CLERK_ISSUER}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - ENV=${ENV:-production}
+    networks:
+      - drift-network
+
+  # Auto-update (optional)
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 30 drift-web drift-backend
+    networks:
+      - drift-network
+
+networks:
+  drift-network:
+    driver: bridge
