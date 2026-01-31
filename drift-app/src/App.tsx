@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { open } from '@tauri-apps/plugin-shell'
 
 interface RecordingStatus {
   is_recording: boolean
@@ -80,9 +81,13 @@ export default function App() {
     return () => clearInterval(interval)
   }, [isLoggedIn])
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     // Opens web app desktop auth page, which will redirect back with drift:// deep link
-    window.open('https://34.185.148.16/auth/desktop', '_blank')
+    try {
+      await open('https://34.185.148.16/auth/desktop')
+    } catch (e) {
+      console.error('Failed to open browser:', e)
+    }
   }
 
   const handleStartRecording = async () => {
