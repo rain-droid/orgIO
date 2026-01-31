@@ -1,0 +1,76 @@
+:root {
+  font-family: 'Inter', system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --bg-base: #09090b;
+  --bg-surface: #0f0f11;
+  --bg-card: #141416;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --accent: #3b82f6;
+  --role-pm: #3b82f6;
+  --role-dev: #10b981;
+  --role-designer: #8b5cf6;
+  color: var(--text-primary);
+  background-color: var(--bg-base);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea {
+  font-family: inherit;
+}
+
+button {
+  border-radius: 10px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.1em;
+  font-size: 0.95rem;
+  font-weight: 600;
+  background-color: var(--accent);
+  color: #ffffff;
+  cursor: pointer;
+  transition: transform 150ms, box-shadow 150ms, border-color 150ms;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+input,
+textarea {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #232329;
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  padding: 0.65rem 0.8rem;
+}
+
+textarea {
+  min-height: 120px;
+  resize: vertical;
+}
