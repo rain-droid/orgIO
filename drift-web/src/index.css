@@ -4,24 +4,25 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #09090B;
-  --foreground: #FAFAFA;
-  --card: #141416;
-  --card-foreground: #FAFAFA;
-  --popover: #141416;
-  --popover-foreground: #FAFAFA;
+  /* Light Mode - Clean & Modern */
+  --background: #FFFFFF;
+  --foreground: #09090B;
+  --card: #FFFFFF;
+  --card-foreground: #09090B;
+  --popover: #FFFFFF;
+  --popover-foreground: #09090B;
   --primary: #3B82F6;
   --primary-foreground: #FFFFFF;
-  --secondary: #1F1F23;
-  --secondary-foreground: #FAFAFA;
-  --muted: #1F1F23;
+  --secondary: #F4F4F5;
+  --secondary-foreground: #18181B;
+  --muted: #F4F4F5;
   --muted-foreground: #71717A;
-  --accent: #1F1F23;
-  --accent-foreground: #FAFAFA;
+  --accent: #F4F4F5;
+  --accent-foreground: #18181B;
   --destructive: #EF4444;
-  --destructive-foreground: #FAFAFA;
-  --border: #27272A;
-  --input: #27272A;
+  --destructive-foreground: #FFFFFF;
+  --border: #E4E4E7;
+  --input: #E4E4E7;
   --ring: #3B82F6;
   
   /* Role colors */
@@ -35,28 +36,28 @@
   --chart-4: #8B5CF6;
   --chart-5: #EC4899;
   
-  --sidebar: #0F0F11;
-  --sidebar-foreground: #FAFAFA;
+  --sidebar: #FAFAFA;
+  --sidebar-foreground: #09090B;
   --sidebar-primary: #3B82F6;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1F1F23;
-  --sidebar-accent-foreground: #FAFAFA;
-  --sidebar-border: #27272A;
+  --sidebar-accent: #F4F4F5;
+  --sidebar-accent-foreground: #18181B;
+  --sidebar-border: #E4E4E7;
   --sidebar-ring: #3B82F6;
   
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-serif: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-  --radius: 0.5rem;
+  --radius: 0.75rem;
   
-  --shadow-2xs: none;
-  --shadow-xs: none;
-  --shadow-sm: none;
-  --shadow: none;
-  --shadow-md: none;
-  --shadow-lg: none;
-  --shadow-xl: none;
-  --shadow-2xl: none;
+  --shadow-2xs: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-xs: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.08);
+  --shadow: 0 4px 6px rgba(0,0,0,0.08);
+  --shadow-md: 0 6px 12px rgba(0,0,0,0.1);
+  --shadow-lg: 0 12px 24px rgba(0,0,0,0.12);
+  --shadow-xl: 0 20px 40px rgba(0,0,0,0.15);
+  --shadow-2xl: 0 25px 50px rgba(0,0,0,0.2);
 }
 
 @theme inline {
@@ -122,11 +123,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #27272A;
+  background: #D4D4D8;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3F3F46;
+  background: #A1A1AA;
 }
 
 /* Animations */
