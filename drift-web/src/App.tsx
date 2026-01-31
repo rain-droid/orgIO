@@ -247,64 +247,82 @@ export default function App() {
         <main className="flex-1 overflow-auto">
           {/* HOME VIEW */}
           {currentView === 'home' && (
-            <div className="min-h-full flex flex-col">
-              {/* Hero Input Section */}
-              <div className="flex-1 flex items-center justify-center p-8">
-                <div className="w-full max-w-2xl space-y-6 animate-slideUp">
-                  <div className="text-center space-y-2">
-                    <h1 className="text-3xl font-semibold">What are we building?</h1>
-                    <p className="text-muted-foreground">
-                      Describe your feature. AI generates {currentRole === 'pm' ? 'user stories & timeline' : currentRole === 'dev' ? 'architecture & API specs' : 'user flows & components'}.
-                    </p>
-                  </div>
-                  
-                  {/* Big Input */}
-                  <div className="relative">
-                    <textarea
-                      placeholder="e.g. Apple Pay Checkout, User Authentication, Dashboard Redesign..."
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleCreateBrief())}
-                      className="w-full h-32 p-6 bg-card border border-border rounded-lg text-lg resize-none placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-                    />
-                    <Button
-                      onClick={handleCreateBrief}
-                      disabled={!inputValue.trim() || loading}
-                      className="absolute bottom-4 right-4 h-10 px-6"
-                    >
-                      {loading ? <Loader2 className="size-4 animate-spin" /> : <>Create <ArrowRight className="ml-2 size-4" /></>}
-                    </Button>
+            <div className="min-h-full flex flex-col p-6 lg:p-10">
+              {/* Hero Section */}
+              <div className="flex-1 flex flex-col justify-center max-w-xl mx-auto w-full animate-slideUp">
+                <div className="space-y-1 mb-6">
+                  <h1 className="text-2xl font-semibold tracking-tight">What are we building?</h1>
+                  <p className="text-sm text-muted-foreground">
+                    AI generates {currentRole === 'pm' ? 'user stories & timeline' : currentRole === 'dev' ? 'architecture & API specs' : 'user flows & components'}
+                  </p>
+                </div>
+                
+                {/* Input */}
+                <div className="relative mb-8">
+                  <textarea
+                    placeholder="Describe your feature..."
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleCreateBrief())}
+                    className="w-full h-24 p-4 bg-card border border-border rounded-md text-sm resize-none placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+                  />
+                  <Button
+                    onClick={handleCreateBrief}
+                    disabled={!inputValue.trim() || loading}
+                    size="sm"
+                    className="absolute bottom-3 right-3"
+                  >
+                    {loading ? <Loader2 className="size-3 animate-spin" /> : <>Create <ArrowRight className="ml-1.5 size-3" /></>}
+                  </Button>
+                </div>
+
+                {/* Quick Stats */}
+                <div className="grid grid-cols-3 gap-3 mb-8">
+                  <button 
+                    onClick={() => setCurrentView('home')}
+                    className="p-3 text-left bg-card border border-border rounded-md hover:border-primary/50 transition-colors"
+                  >
+                    <div className="text-xl font-semibold">{briefs.filter(b => b.status === 'active').length}</div>
+                    <div className="text-xs text-muted-foreground">Active</div>
+                  </button>
+                  <button 
+                    onClick={() => setCurrentView('reviews')}
+                    className="p-3 text-left bg-card border border-border rounded-md hover:border-primary/50 transition-colors"
+                  >
+                    <div className="text-xl font-semibold">{submissions.filter(s => s.status === 'pending').length}</div>
+                    <div className="text-xs text-muted-foreground">Pending</div>
+                  </button>
+                  <div className="p-3 text-left bg-card border border-border rounded-md">
+                    <div className="text-xl font-semibold">{submissions.filter(s => s.status === 'approved').length}</div>
+                    <div className="text-xs text-muted-foreground">Approved</div>
                   </div>
                 </div>
-              </div>
 
-              {/* Recent Briefs */}
-              {briefs.length > 0 && (
-                <div className="border-t border-border/50 p-8">
-                  <div className="max-w-4xl mx-auto">
-                    <h2 className="text-sm font-medium text-muted-foreground mb-4">RECENT BRIEFS</h2>
-                    <div className="grid gap-2">
-                      {briefs.slice(0, 5).map(brief => (
+                {/* Recent Briefs */}
+                {briefs.length > 0 && (
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Recent</div>
+                    <div className="space-y-1">
+                      {briefs.slice(0, 4).map(brief => (
                         <div
                           key={brief.id}
-                          className="group flex items-center gap-4 p-4 bg-card/50 hover:bg-card border border-transparent hover:border-border rounded-lg cursor-pointer transition-all"
+                          className="group flex items-center gap-3 p-2.5 hover:bg-muted/50 rounded-md cursor-pointer transition-colors"
                           onClick={() => handleBriefSelect(brief)}
                         >
-                          <div className={`size-2 rounded-full ${brief.status === 'active' ? 'bg-emerald-400' : 'bg-muted-foreground'}`} />
-                          <span className="flex-1 font-medium">{brief.name}</span>
-                          <span className="text-xs text-muted-foreground">{brief.status}</span>
+                          <div className={`size-1.5 rounded-full ${brief.status === 'active' ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`} />
+                          <span className="flex-1 text-sm truncate">{brief.name}</span>
                           <button
                             onClick={(e) => { e.stopPropagation(); setDeleteConfirm(brief.id); }}
                             className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-all"
                           >
-                            <Trash2 className="size-4 text-destructive" />
+                            <Trash2 className="size-3 text-destructive" />
                           </button>
                         </div>
                       ))}
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
 
