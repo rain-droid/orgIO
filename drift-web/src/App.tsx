@@ -191,17 +191,34 @@ export default function App() {
   // Not signed in
   if (!isSignedIn) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-8 animate-fadeIn">
-          <div className="space-y-2">
-            <h1 className="text-5xl font-bold tracking-tight">DRIFT</h1>
-            <p className="text-muted-foreground text-lg">One brief. Three views. Zero meetings.</p>
+      <div className="min-h-screen bg-background flex items-center justify-center hero-bg relative overflow-hidden">
+        {/* Decorative gradient orbs */}
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl" />
+        
+        <div className="relative text-center space-y-10 animate-slideUp px-6">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-sm text-primary font-medium mb-4">
+              <Sparkles className="size-4" />
+              AI-Powered Product Specs
+            </div>
+            <h1 className="text-6xl md:text-7xl font-bold tracking-tight">
+              Drift
+            </h1>
+            <p className="text-xl text-muted-foreground max-w-md mx-auto">
+              One brief. Three views. Zero meetings.
+            </p>
           </div>
-          <SignInButton mode="modal">
-            <Button size="lg" className="h-12 px-8 text-base">
-              Get Started <ArrowRight className="ml-2 size-4" />
-            </Button>
-          </SignInButton>
+          <div className="space-y-4">
+            <SignInButton mode="modal">
+              <Button size="lg" className="h-14 px-10 text-base font-semibold shadow-lg hover:shadow-xl transition-all">
+                Start Building <ArrowRight className="ml-2 size-5" />
+              </Button>
+            </SignInButton>
+            <p className="text-sm text-muted-foreground">
+              Free for teams up to 5 members
+            </p>
+          </div>
         </div>
       </div>
     )
@@ -244,73 +261,107 @@ export default function App() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto">
           {/* HOME VIEW */}
           {currentView === 'home' && (
-            <div className="max-w-2xl animate-slideUp">
-              {/* Input Section */}
-              <div className="mb-6">
-                <h1 className="text-lg font-medium mb-1">What are we building?</h1>
-                <p className="text-xs text-muted-foreground mb-3">
-                  AI generates {currentRole === 'pm' ? 'user stories & timeline' : currentRole === 'dev' ? 'architecture & API specs' : 'user flows & components'}
-                </p>
-                <div className="relative">
-                  <textarea
-                    placeholder="Describe your feature..."
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleCreateBrief())}
-                    className="w-full h-20 p-3 bg-card border border-border rounded-md text-sm resize-none placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
-                  />
-                  <Button
-                    onClick={handleCreateBrief}
-                    disabled={!inputValue.trim() || loading}
-                    size="sm"
-                    className="absolute bottom-2 right-2 h-7 text-xs"
-                  >
-                    {loading ? <Loader2 className="size-3 animate-spin" /> : <>Create <ArrowRight className="ml-1 size-3" /></>}
-                  </Button>
+            <div className="h-full flex flex-col animate-fadeIn">
+              {/* Hero Section */}
+              <div className="flex-1 flex flex-col items-center justify-center max-w-3xl mx-auto w-full px-6">
+                {/* Main Headline */}
+                <div className="text-center mb-10">
+                  <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4 bg-gradient-to-r from-foreground via-foreground to-muted-foreground bg-clip-text">
+                    Ship faster with AI-powered briefs
+                  </h1>
+                  <p className="text-lg text-muted-foreground max-w-xl mx-auto">
+                    Describe what you're building. Drift generates specs tailored for{' '}
+                    <span className={roleColor}>{currentRole === 'pm' ? 'product managers' : currentRole === 'dev' ? 'developers' : 'designers'}</span>.
+                  </p>
                 </div>
-              </div>
 
-              {/* Quick Stats */}
-              <div className="flex gap-4 mb-6 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-emerald-500" />
-                  <span className="text-muted-foreground">{briefs.filter(b => b.status === 'active').length} active</span>
-                </div>
-                <button onClick={() => setCurrentView('reviews')} className="flex items-center gap-2 hover:text-primary transition-colors">
-                  <span className="size-2 rounded-full bg-yellow-500" />
-                  <span className="text-muted-foreground">{submissions.filter(s => s.status === 'pending').length} pending</span>
-                </button>
-                <div className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-primary" />
-                  <span className="text-muted-foreground">{submissions.filter(s => s.status === 'approved').length} approved</span>
-                </div>
-              </div>
-
-              {/* Recent Briefs */}
-              {briefs.length > 0 && (
-                <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Recent Briefs</div>
-                  <div className="border border-border rounded-md divide-y divide-border">
-                    {briefs.slice(0, 5).map(brief => (
-                      <div
-                        key={brief.id}
-                        className="group flex items-center gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer transition-colors"
-                        onClick={() => handleBriefSelect(brief)}
-                      >
-                        <div className={`size-1.5 rounded-full ${brief.status === 'active' ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`} />
-                        <span className="flex-1 text-sm">{brief.name}</span>
-                        <span className="text-xs text-muted-foreground">{brief.status}</span>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm(brief.id); }}
-                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-all"
-                        >
-                          <Trash2 className="size-3 text-destructive" />
-                        </button>
+                {/* Input Card */}
+                <div className="w-full max-w-2xl">
+                  <div className="relative bg-card border border-border rounded-xl shadow-lg p-1 input-glow transition-all">
+                    <textarea
+                      placeholder="Describe your feature... e.g., 'Add Apple Pay integration to checkout'"
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleCreateBrief())}
+                      className="w-full h-28 p-4 bg-transparent text-base resize-none placeholder:text-muted-foreground/40 focus:outline-none"
+                    />
+                    <div className="flex items-center justify-between px-3 pb-3">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Sparkles className="size-3.5" />
+                        <span>AI generates {currentRole === 'pm' ? 'user stories & sprints' : currentRole === 'dev' ? 'architecture & API specs' : 'flows & components'}</span>
                       </div>
-                    ))}
+                      <Button
+                        onClick={handleCreateBrief}
+                        disabled={!inputValue.trim() || loading}
+                        className="h-10 px-5 text-sm font-medium"
+                      >
+                        {loading ? <Loader2 className="size-4 animate-spin" /> : <>Create Brief <ArrowRight className="ml-2 size-4" /></>}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stats Cards */}
+                <div className="flex flex-wrap items-center justify-center gap-4 mt-10">
+                  <div className="flex items-center gap-3 px-5 py-4 bg-card border border-border rounded-xl card-lift">
+                    <div className="size-3 rounded-full bg-emerald-500 animate-pulse" />
+                    <div>
+                      <div className="text-2xl font-bold">{briefs.filter(b => b.status === 'active').length}</div>
+                      <div className="text-xs text-muted-foreground font-medium">Active Briefs</div>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setCurrentView('reviews')} 
+                    className="flex items-center gap-3 px-5 py-4 bg-card border border-border rounded-xl card-lift hover:border-yellow-500/50 hover:bg-yellow-500/5"
+                  >
+                    <div className="size-3 rounded-full bg-yellow-500" />
+                    <div className="text-left">
+                      <div className="text-2xl font-bold">{submissions.filter(s => s.status === 'pending').length}</div>
+                      <div className="text-xs text-muted-foreground font-medium">Pending Reviews</div>
+                    </div>
+                  </button>
+                  <div className="flex items-center gap-3 px-5 py-4 bg-card border border-border rounded-xl card-lift">
+                    <div className="size-3 rounded-full bg-primary" />
+                    <div>
+                      <div className="text-2xl font-bold">{submissions.filter(s => s.status === 'approved').length}</div>
+                      <div className="text-xs text-muted-foreground font-medium">Approved</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Briefs - Bottom Section */}
+              {briefs.length > 0 && (
+                <div className="border-t border-border bg-muted/30 px-6 py-6">
+                  <div className="max-w-3xl mx-auto">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-sm font-semibold text-foreground">Recent Briefs</h2>
+                      <span className="text-xs text-muted-foreground">{briefs.length} total</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {briefs.slice(0, 6).map(brief => (
+                        <div
+                          key={brief.id}
+                          className="group relative flex items-center gap-3 p-4 bg-card border border-border rounded-xl card-lift hover:border-primary/50 cursor-pointer"
+                          onClick={() => handleBriefSelect(brief)}
+                        >
+                          <div className={`size-2.5 rounded-full shrink-0 ${brief.status === 'active' ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">{brief.name}</div>
+                            <div className="text-xs text-muted-foreground capitalize">{brief.status}</div>
+                          </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setDeleteConfirm(brief.id); }}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-destructive/10 rounded-md transition-all"
+                          >
+                            <Trash2 className="size-3.5 text-destructive" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
