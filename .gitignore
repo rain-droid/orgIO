@@ -31,5 +31,15 @@ npm-debug.log*
 # Test
 coverage/
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+
 # Misc
 *.local
