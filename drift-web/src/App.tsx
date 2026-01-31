@@ -1,475 +1,563 @@
-import { useMemo, useState, useEffect, useCallback } from 'react'
-import './App.css'
-import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from '@clerk/clerk-react'
-import type { Brief, Role, Submission, Task, User } from './types'
-import { BriefView } from './components/brief/BriefView'
+import { useEffect, useState } from 'react'
+import { useUser, useAuth, SignInButton, UserButton } from '@clerk/clerk-react'
+import { AppSidebar } from '@/components/app-sidebar'
 import {
-  createBrief,
-  createSubmission,
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
+import { Separator } from '@/components/ui/separator'
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from '@/components/ui/sidebar'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import type { Brief, Submission, User } from './types'
+import {
   fetchBriefs,
+  createBrief,
   fetchSubmissions,
-  fetchTasks,
-  fetchUser,
-  markTasksDone,
-  syncUser,
+  createSubmission,
   updateSubmissionStatus,
+  syncUser,
+  fetchUser,
   updateUserRole,
 } from './lib/data'
+import { Plus, FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react'
 
-const roles: Role[] = ['pm', 'dev', 'designer']
+type View = 'dashboard' | 'briefs' | 'reviews' | 'brief-detail'
+type Role = 'pm' | 'dev' | 'designer'
 
-function App() {
-  const { user: clerkUser } = useUser()
-  const [driftUser, setDriftUser] = useState<User | null>(null)
+export default function App() {
+  const { isSignedIn, user: clerkUser } = useUser()
+  const { orgId } = useAuth()
+
   const [briefs, setBriefs] = useState<Brief[]>([])
-  const [tasks, setTasks] = useState<Task[]>([])
   const [submissions, setSubmissions] = useState<Submission[]>([])
-  const [activeBriefId, setActiveBriefId] = useState<string | null>(null)
-  const [activeNav, setActiveNav] = useState<'home' | 'briefs' | 'reviews'>('home')
-  const [createName, setCreateName] = useState('')
+  const [driftUser, setDriftUser] = useState<User | null>(null)
+  const [currentView, setCurrentView] = useState<View>('dashboard')
+  const [selectedBrief, setSelectedBrief] = useState<Brief | null>(null)
+  const [newBriefTitle, setNewBriefTitle] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const orgId = clerkUser?.organizationMemberships?.[0]?.organization?.id ?? 'personal'
 
-  const activeRole = driftUser?.role ?? 'pm'
+  const currentRole: Role = (driftUser?.role as Role) || 'dev'
 
+  // Load data
   useEffect(() => {
-    let mounted = true
-    async function syncClerkUser() {
-      if (!clerkUser) {
-        setDriftUser(null)
-        return
-      }
-      try {
-        let existingUser = await fetchUser(clerkUser.id)
-        if (!existingUser) {
-          existingUser = await syncUser({
-            id: clerkUser.id,
-            orgId,
-            email: clerkUser.primaryEmailAddress?.emailAddress ?? '',
-            name: clerkUser.fullName ?? clerkUser.username ?? 'User',
-            avatarUrl: clerkUser.imageUrl ?? null,
-          })
-        }
-        if (mounted) setDriftUser(existingUser)
-      } catch (err) {
-        console.error('Failed to sync user:', err)
-      }
-    }
-    syncClerkUser()
-    return () => { mounted = false }
-  }, [clerkUser, orgId])
+    if (!isSignedIn || !clerkUser || !orgId) return
 
-  const handleRoleChange = useCallback(async (newRole: Role) => {
-    if (!driftUser) return
-    try {
-      const updatedUser = await updateUserRole(driftUser.id, newRole)
-      setDriftUser(updatedUser)
-    } catch (err) {
-      setError((err as Error).message)
-    }
-  }, [driftUser])
-
-  const activeBrief = useMemo(
-    () => briefs.find((b) => b.id === activeBriefId) ?? null,
-    [briefs, activeBriefId]
-  )
-
-  const pendingSubmissions = submissions.filter((s) => s.status === 'pending')
-
-  useEffect(() => {
-    let mounted = true
-    async function load() {
-      if (!clerkUser) return
+    const loadData = async () => {
       setLoading(true)
-      setError(null)
       try {
-        const fetchedBriefs = await fetchBriefs(orgId)
-        if (!mounted) return
-        setBriefs(fetchedBriefs)
-        const briefIds = fetchedBriefs.map((b) => b.id)
-        const [fetchedTasks, fetchedSubmissions] = await Promise.all([
-          fetchTasks(briefIds),
-          fetchSubmissions(briefIds),
+        await syncUser(clerkUser.id, clerkUser.primaryEmailAddress?.emailAddress || '', orgId)
+        const [briefsData, subsData, userData] = await Promise.all([
+          fetchBriefs(orgId),
+          fetchSubmissions(orgId),
+          fetchUser(clerkUser.id),
         ])
-        if (!mounted) return
-        setTasks(fetchedTasks)
-        setSubmissions(fetchedSubmissions)
+        setBriefs(briefsData)
+        setSubmissions(subsData)
+        setDriftUser(userData)
       } catch (err) {
-        if (!mounted) return
-        setError((err as Error).message)
+        setError(err instanceof Error ? err.message : 'Failed to load data')
       } finally {
-        if (mounted) setLoading(false)
+        setLoading(false)
       }
     }
-    load()
-    return () => { mounted = false }
-  }, [clerkUser, orgId])
+    loadData()
+  }, [isSignedIn, clerkUser, orgId])
 
   const handleCreateBrief = async () => {
-    if (!createName.trim() || !clerkUser) return
+    if (!newBriefTitle.trim() || !orgId || !clerkUser) return
     setLoading(true)
     try {
       const newBrief = await createBrief({
-        orgId,
-        name: createName.trim(),
-        description: '',
-        createdBy: clerkUser.fullName ?? clerkUser.username ?? 'User',
+        title: newBriefTitle,
+        org_id: orgId,
+        created_by: clerkUser.id,
+        content: {
+          pm: { summary: 'New brief created', userStories: [], acceptanceCriteria: [] },
+          dev: { architecture: '', apiEndpoints: [], techStack: [] },
+          designer: { userFlow: [], wireframes: [], designSystem: [] },
+        },
       })
-      setBriefs((prev) => [newBrief, ...prev])
-      setCreateName('')
-      setActiveBriefId(newBrief.id)
+      setBriefs([newBrief, ...briefs])
+      setNewBriefTitle('')
     } catch (err) {
-      setError((err as Error).message)
+      setError(err instanceof Error ? err.message : 'Failed to create brief')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleSimulateSubmission = async (briefId: string, role: Role) => {
+  const handleRoleChange = async (role: Role) => {
     if (!clerkUser) return
+    try {
+      await updateUserRole(clerkUser.id, role)
+      setDriftUser(prev => prev ? { ...prev, role } : null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update role')
+    }
+  }
+
+  const handleSubmit = async (briefId: string) => {
+    if (!clerkUser || !orgId) return
     setLoading(true)
     try {
-      const briefTasks = tasks.filter((t) => t.briefId === briefId && t.role === role)
-      const matchedTasks = briefTasks.slice(0, 2).map((t) => t.id)
-      const submission = await createSubmission({
-        briefId,
-        userId: clerkUser.id,
-        userName: clerkUser.fullName ?? clerkUser.username ?? 'User',
-        role,
-        summaryLines:
-          role === 'pm'
-            ? ['Prioritized sprint backlog', 'Reviewed dependencies', 'Updated timeline']
-            : role === 'dev'
-              ? ['Implemented Stripe webhook', 'Added error handling', 'Wrote unit tests']
-              : ['Designed Apple Pay button', 'Defined component states', 'Updated user flow'],
-        durationMinutes: 154,
-        matchedTasks,
+      const newSub = await createSubmission({
+        brief_id: briefId,
+        user_id: clerkUser.id,
+        org_id: orgId,
+        summary: `Work completed for ${briefs.find(b => b.id === briefId)?.title}`,
+        tasks_done: ['Implementation complete', 'Tests passing', 'Documentation updated'],
       })
-      setSubmissions((prev) => [submission, ...prev])
+      setSubmissions([newSub, ...submissions])
     } catch (err) {
-      setError((err as Error).message)
+      setError(err instanceof Error ? err.message : 'Failed to submit')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleApproveSubmission = async (submissionId: string) => {
-    const submission = submissions.find((s) => s.id === submissionId)
-    if (!submission) return
+  const handleReview = async (submissionId: string, status: 'approved' | 'rejected') => {
     setLoading(true)
     try {
-      await updateSubmissionStatus(submissionId, 'approved')
-      await markTasksDone(submission.matchedTasks)
-      setSubmissions((prev) =>
-        prev.map((s) => (s.id === submissionId ? { ...s, status: 'approved' } : s))
-      )
-      setTasks((prev) =>
-        prev.map((t) => (submission.matchedTasks.includes(t.id) ? { ...t, status: 'done' } : t))
-      )
+      await updateSubmissionStatus(submissionId, status)
+      setSubmissions(submissions.map(s => 
+        s.id === submissionId ? { ...s, status } : s
+      ))
     } catch (err) {
-      setError((err as Error).message)
+      setError(err instanceof Error ? err.message : 'Failed to review')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleRejectSubmission = async (submissionId: string) => {
-    setLoading(true)
-    try {
-      await updateSubmissionStatus(submissionId, 'rejected')
-      setSubmissions((prev) =>
-        prev.map((s) => (s.id === submissionId ? { ...s, status: 'rejected' } : s))
-      )
-    } catch (err) {
-      setError((err as Error).message)
-    } finally {
-      setLoading(false)
-    }
+  const handleBriefSelect = (brief: Brief) => {
+    setSelectedBrief(brief)
+    setCurrentView('brief-detail')
+  }
+
+  const handleViewChange = (view: 'dashboard' | 'briefs' | 'reviews') => {
+    setCurrentView(view)
+    setSelectedBrief(null)
+  }
+
+  const userData = clerkUser ? {
+    name: clerkUser.fullName || clerkUser.username || 'User',
+    email: clerkUser.primaryEmailAddress?.emailAddress || '',
+    avatar: clerkUser.imageUrl,
+  } : undefined
+
+  // Stats
+  const stats = {
+    total: briefs.length,
+    active: briefs.filter(b => b.status === 'active').length,
+    pending: submissions.filter(s => s.status === 'pending').length,
+    approved: submissions.filter(s => s.status === 'approved').length,
+  }
+
+  // Not signed in
+  if (!isSignedIn) {
+    return (
+      <div className="dark min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-6">
+          <div className="flex items-center justify-center gap-3">
+            <div className="bg-emerald-500 text-black flex aspect-square size-12 items-center justify-center rounded-xl">
+              <FileText className="size-6" />
+            </div>
+            <h1 className="text-3xl font-bold">Drift</h1>
+          </div>
+          <p className="text-muted-foreground">AI-powered sprint planning</p>
+          <SignInButton mode="modal">
+            <Button size="lg" className="bg-emerald-500 hover:bg-emerald-600 text-black">
+              Sign In to Continue
+            </Button>
+          </SignInButton>
+        </div>
+      </div>
+    )
+  }
+
+  // No org selected
+  if (!orgId) {
+    return (
+      <div className="dark min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-6">
+          <h1 className="text-2xl font-bold">Select an Organization</h1>
+          <p className="text-muted-foreground">Please select or create an organization to continue</p>
+          <UserButton afterSignOutUrl="/" />
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="app-layout">
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <div className="logo">
-            <span className="logo-dot"></span>
-            <span className="logo-text">DRIFT</span>
-          </div>
-        </div>
-
-        <SignedIn>
-          <nav className="sidebar-nav">
-            <button 
-              className={`nav-item ${activeNav === 'home' && !activeBrief ? 'active' : ''}`}
-              onClick={() => { setActiveNav('home'); setActiveBriefId(null); }}
-            >
-              <svg className="nav-icon" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M8 1L1 6v9h5V10h4v5h5V6L8 1z"/>
-              </svg>
-              Home
-            </button>
-            <button 
-              className={`nav-item ${activeNav === 'briefs' ? 'active' : ''}`}
-              onClick={() => { setActiveNav('briefs'); setActiveBriefId(null); }}
-            >
-              <svg className="nav-icon" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M2 2h12v2H2V2zm0 4h12v2H2V6zm0 4h8v2H2v-2z"/>
-              </svg>
-              Briefs
-              {briefs.length > 0 && <span className="nav-badge">{briefs.length}</span>}
-            </button>
-            <button 
-              className={`nav-item ${activeNav === 'reviews' ? 'active' : ''}`}
-              onClick={() => { setActiveNav('reviews'); setActiveBriefId(null); }}
-            >
-              <svg className="nav-icon" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M8 0a8 8 0 100 16A8 8 0 008 0zm1 11H7V9h2v2zm0-4H7V3h2v4z"/>
-              </svg>
-              Reviews
-              {pendingSubmissions.length > 0 && (
-                <span className="nav-badge warning">{pendingSubmissions.length}</span>
-              )}
-            </button>
-          </nav>
-
-          <div className="sidebar-section">
-            <div className="sidebar-section-title">Your Role</div>
-            <div className="role-switcher">
-              {roles.map((role) => (
-                <button
-                  key={role}
-                  className={`role-btn ${activeRole === role ? `active role-${role}` : ''}`}
-                  onClick={() => handleRoleChange(role)}
-                >
-                  {role.toUpperCase()}
-                </button>
-              ))}
+    <div className="dark">
+      <SidebarProvider>
+        <AppSidebar 
+          user={userData}
+          briefs={briefs}
+          onBriefSelect={handleBriefSelect}
+          onViewChange={handleViewChange}
+          currentView={currentView}
+        />
+        <SidebarInset>
+          {/* Header */}
+          <header className="flex h-16 shrink-0 items-center gap-2">
+            <div className="flex items-center gap-2 px-4">
+              <SidebarTrigger className="-ml-1" />
+              <Separator orientation="vertical" className="mr-2 h-4" />
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem className="hidden md:block">
+                    <BreadcrumbLink href="#">Drift</BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator className="hidden md:block" />
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>
+                      {currentView === 'dashboard' && 'Dashboard'}
+                      {currentView === 'briefs' && 'Briefs'}
+                      {currentView === 'reviews' && 'Reviews'}
+                      {currentView === 'brief-detail' && selectedBrief?.title}
+                    </BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
             </div>
-          </div>
-        </SignedIn>
-
-        <div className="sidebar-footer">
-          <SignedIn>
-            <div className="user-menu">
-              <UserButton />
-              <span className="user-name">{clerkUser?.firstName || 'User'}</span>
+            <div className="ml-auto flex items-center gap-4 px-4">
+              {/* Role Switcher */}
+              <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+                {(['pm', 'dev', 'designer'] as Role[]).map(role => (
+                  <button
+                    key={role}
+                    onClick={() => handleRoleChange(role)}
+                    className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                      currentRole === role
+                        ? role === 'pm' 
+                          ? 'bg-pink-500/20 text-pink-400'
+                          : role === 'dev'
+                          ? 'bg-cyan-500/20 text-cyan-400'
+                          : 'bg-violet-500/20 text-violet-400'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {role.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+              <UserButton afterSignOutUrl="/" />
             </div>
-          </SignedIn>
-          <SignedOut>
-            <SignInButton mode="modal">
-              <button className="btn-signin">Sign in</button>
-            </SignInButton>
-          </SignedOut>
-        </div>
-      </aside>
+          </header>
 
-      {/* Main Content */}
-      <main className="main-content">
-        {error && <div className="toast error">{error}</div>}
-        {loading && <div className="toast loading">Loading...</div>}
+          {/* Toast */}
+          {error && (
+            <div className="fixed top-4 right-4 z-50 bg-destructive/15 border border-destructive/30 text-destructive px-4 py-3 rounded-lg flex items-center gap-2">
+              <AlertCircle className="size-4" />
+              {error}
+              <button onClick={() => setError(null)} className="ml-2 hover:opacity-70">×</button>
+            </div>
+          )}
 
-        <SignedOut>
-          <div className="auth-prompt">
-            <h1>Welcome to Drift</h1>
-            <p>AI-powered sprint planning with personalized role views</p>
-            <SignInButton mode="modal">
-              <button className="btn primary large">Get Started</button>
-            </SignInButton>
-          </div>
-        </SignedOut>
-
-        <SignedIn>
-          {!activeBrief && (
-            <>
-              {/* Page Header */}
-              <header className="page-header">
-                <div className="page-title">
-                  <h1>{activeNav === 'home' ? 'Dashboard' : activeNav === 'briefs' ? 'Briefs' : 'Reviews'}</h1>
-                  <p className="page-subtitle">
-                    {activeNav === 'home' && 'Your sprint planning overview'}
-                    {activeNav === 'briefs' && 'Manage your team briefs'}
-                    {activeNav === 'reviews' && 'Review submitted work'}
-                  </p>
+          {/* Content */}
+          <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+            {/* Dashboard View */}
+            {currentView === 'dashboard' && (
+              <>
+                {/* Stats */}
+                <div className="grid auto-rows-min gap-4 md:grid-cols-4">
+                  <div className="rounded-xl border bg-card p-4">
+                    <div className="text-2xl font-bold">{stats.total}</div>
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Briefs</div>
+                  </div>
+                  <div className="rounded-xl border bg-card p-4">
+                    <div className="text-2xl font-bold text-emerald-400">{stats.active}</div>
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide">Active</div>
+                  </div>
+                  <div className="rounded-xl border bg-card p-4">
+                    <div className="text-2xl font-bold text-yellow-400">{stats.pending}</div>
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide">Pending Review</div>
+                  </div>
+                  <div className="rounded-xl border bg-card p-4">
+                    <div className="text-2xl font-bold text-cyan-400">{stats.approved}</div>
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide">Approved</div>
+                  </div>
                 </div>
-                <div className="page-actions">
-                  <div className="create-bar">
-                    <input
-                      type="text"
-                      placeholder="Create new brief..."
-                      value={createName}
-                      onChange={(e) => setCreateName(e.target.value)}
+
+                {/* Create Brief */}
+                <div className="rounded-xl border bg-card p-4">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="New brief title..."
+                      value={newBriefTitle}
+                      onChange={(e) => setNewBriefTitle(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleCreateBrief()}
+                      className="flex-1"
                     />
-                    <button 
-                      className="btn primary"
-                      onClick={handleCreateBrief}
-                      disabled={!createName.trim()}
+                    <Button 
+                      onClick={handleCreateBrief} 
+                      disabled={!newBriefTitle.trim() || loading}
+                      className="bg-emerald-500 hover:bg-emerald-600 text-black"
                     >
-                      Create
-                    </button>
+                      <Plus className="size-4 mr-2" />
+                      Create Brief
+                    </Button>
                   </div>
                 </div>
-              </header>
 
-              {/* Dashboard Content */}
-              {activeNav === 'home' && (
-                <div className="dashboard-grid">
-                  {/* Stats Row */}
-                  <div className="stats-row">
-                    <div className="stat-card">
-                      <div className="stat-value">{briefs.length}</div>
-                      <div className="stat-label">Active Briefs</div>
-                    </div>
-                    <div className="stat-card">
-                      <div className="stat-value">{pendingSubmissions.length}</div>
-                      <div className="stat-label">Pending Reviews</div>
-                    </div>
-                    <div className="stat-card">
-                      <div className="stat-value">{tasks.filter(t => t.status === 'done').length}</div>
-                      <div className="stat-label">Tasks Done</div>
-                    </div>
-                    <div className="stat-card">
-                      <div className="stat-value">{tasks.length}</div>
-                      <div className="stat-label">Total Tasks</div>
-                    </div>
+                {/* Recent Briefs */}
+                <div className="rounded-xl border bg-card">
+                  <div className="p-4 border-b">
+                    <h2 className="font-semibold">Recent Briefs</h2>
                   </div>
-
-                  {/* Recent Activity */}
-                  <div className="content-section">
-                    <div className="section-header">
-                      <h2>Recent Briefs</h2>
-                      <button className="link-btn" onClick={() => setActiveNav('briefs')}>View all →</button>
-                    </div>
-                    <div className="list">
-                      {briefs.length === 0 ? (
-                        <div className="empty-state">
-                          <p>No briefs yet. Create your first brief to get started.</p>
-                        </div>
-                      ) : (
-                        briefs.slice(0, 5).map((brief) => (
-                          <div key={brief.id} className="list-item" onClick={() => setActiveBriefId(brief.id)}>
-                            <div className="list-item-icon">
-                              <span className="status-indicator active"></span>
-                            </div>
-                            <div className="list-item-content">
-                              <div className="list-item-title">{brief.name}</div>
-                              <div className="list-item-meta">Created by {brief.createdBy}</div>
-                            </div>
-                            <div className="list-item-action">→</div>
+                  <div className="divide-y">
+                    {briefs.slice(0, 5).map(brief => (
+                      <div 
+                        key={brief.id}
+                        onClick={() => handleBriefSelect(brief)}
+                        className="p-4 flex items-center gap-4 hover:bg-accent/50 cursor-pointer transition-colors"
+                      >
+                        <div className={`size-2 rounded-full ${brief.status === 'active' ? 'bg-emerald-400' : 'bg-yellow-400'}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium truncate">{brief.title}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(brief.created_at).toLocaleDateString()}
                           </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Pending Reviews */}
-                  <div className="content-section">
-                    <div className="section-header">
-                      <h2>Pending Reviews</h2>
-                      <button className="link-btn" onClick={() => setActiveNav('reviews')}>View all →</button>
-                    </div>
-                    <div className="list">
-                      {pendingSubmissions.length === 0 ? (
-                        <div className="empty-state">
-                          <p>No pending reviews.</p>
                         </div>
-                      ) : (
-                        pendingSubmissions.slice(0, 5).map((sub) => (
-                          <div key={sub.id} className="list-item" onClick={() => setActiveBriefId(sub.briefId)}>
-                            <div className="list-item-icon">
-                              <span className="status-indicator pending"></span>
-                            </div>
-                            <div className="list-item-content">
-                              <div className="list-item-title">{sub.userName}</div>
-                              <div className="list-item-meta">{sub.summaryLines[0]}</div>
-                            </div>
-                            <span className={`role-tag role-${sub.role}`}>{sub.role}</span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Briefs List */}
-              {activeNav === 'briefs' && (
-                <div className="content-section full">
-                  <div className="list">
-                    {briefs.length === 0 ? (
-                      <div className="empty-state large">
-                        <h3>No briefs yet</h3>
-                        <p>Create your first brief to start sprint planning with your team.</p>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          brief.status === 'active' 
+                            ? 'bg-emerald-500/20 text-emerald-400' 
+                            : 'bg-yellow-500/20 text-yellow-400'
+                        }`}>
+                          {brief.status}
+                        </span>
                       </div>
-                    ) : (
-                      briefs.map((brief) => (
-                        <div key={brief.id} className="list-item" onClick={() => setActiveBriefId(brief.id)}>
-                          <div className="list-item-icon">
-                            <span className="status-indicator active"></span>
-                          </div>
-                          <div className="list-item-content">
-                            <div className="list-item-title">{brief.name}</div>
-                            <div className="list-item-meta">
-                              Created by {brief.createdBy} • {tasks.filter(t => t.briefId === brief.id).length} tasks
-                            </div>
-                          </div>
-                          <div className="list-item-action">→</div>
-                        </div>
-                      ))
+                    ))}
+                    {briefs.length === 0 && (
+                      <div className="p-8 text-center text-muted-foreground">
+                        No briefs yet. Create your first one above!
+                      </div>
                     )}
                   </div>
                 </div>
-              )}
+              </>
+            )}
 
-              {/* Reviews List */}
-              {activeNav === 'reviews' && (
-                <div className="content-section full">
-                  <div className="list">
-                    {pendingSubmissions.length === 0 ? (
-                      <div className="empty-state large">
-                        <h3>All caught up!</h3>
-                        <p>No pending submissions to review.</p>
-                      </div>
-                    ) : (
-                      pendingSubmissions.map((sub) => (
-                        <div key={sub.id} className="list-item" onClick={() => setActiveBriefId(sub.briefId)}>
-                          <div className="list-item-icon">
-                            <span className="status-indicator pending"></span>
-                          </div>
-                          <div className="list-item-content">
-                            <div className="list-item-title">{sub.userName} submitted work</div>
-                            <div className="list-item-meta">{sub.summaryLines.join(' • ')}</div>
-                          </div>
-                          <span className={`role-tag role-${sub.role}`}>{sub.role}</span>
+            {/* Briefs View */}
+            {currentView === 'briefs' && (
+              <div className="rounded-xl border bg-card">
+                <div className="p-4 border-b flex items-center justify-between">
+                  <h2 className="font-semibold">All Briefs</h2>
+                  <span className="text-xs text-muted-foreground">{briefs.length} briefs</span>
+                </div>
+                <div className="divide-y">
+                  {briefs.map(brief => (
+                    <div 
+                      key={brief.id}
+                      onClick={() => handleBriefSelect(brief)}
+                      className="p-4 flex items-center gap-4 hover:bg-accent/50 cursor-pointer transition-colors"
+                    >
+                      <FileText className="size-5 text-muted-foreground" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{brief.title}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Created {new Date(brief.created_at).toLocaleDateString()}
                         </div>
-                      ))
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        brief.status === 'active' 
+                          ? 'bg-emerald-500/20 text-emerald-400' 
+                          : 'bg-yellow-500/20 text-yellow-400'
+                      }`}>
+                        {brief.status}
+                      </span>
+                    </div>
+                  ))}
+                  {briefs.length === 0 && (
+                    <div className="p-8 text-center text-muted-foreground">
+                      No briefs yet
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Reviews View */}
+            {currentView === 'reviews' && (
+              <div className="rounded-xl border bg-card">
+                <div className="p-4 border-b flex items-center justify-between">
+                  <h2 className="font-semibold">Submissions for Review</h2>
+                  <span className="text-xs text-muted-foreground">{submissions.filter(s => s.status === 'pending').length} pending</span>
+                </div>
+                <div className="divide-y">
+                  {submissions.map(sub => (
+                    <div key={sub.id} className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <div className="font-medium">{sub.summary}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(sub.created_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <span className={`text-xs px-2 py-1 rounded flex items-center gap-1 ${
+                          sub.status === 'approved' 
+                            ? 'bg-emerald-500/20 text-emerald-400' 
+                            : sub.status === 'rejected'
+                            ? 'bg-red-500/20 text-red-400'
+                            : 'bg-yellow-500/20 text-yellow-400'
+                        }`}>
+                          {sub.status === 'approved' && <CheckCircle className="size-3" />}
+                          {sub.status === 'pending' && <Clock className="size-3" />}
+                          {sub.status}
+                        </span>
+                      </div>
+                      <div className="text-sm text-muted-foreground mb-3">
+                        <ul className="list-disc list-inside">
+                          {sub.tasks_done.map((task, i) => (
+                            <li key={i}>{task}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      {sub.status === 'pending' && currentRole === 'pm' && (
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleReview(sub.id, 'approved')}
+                            className="bg-emerald-500 hover:bg-emerald-600 text-black"
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleReview(sub.id, 'rejected')}
+                            className="text-red-400 border-red-400/30 hover:bg-red-500/10"
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {submissions.length === 0 && (
+                    <div className="p-8 text-center text-muted-foreground">
+                      No submissions yet
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Brief Detail View */}
+            {currentView === 'brief-detail' && selectedBrief && (
+              <>
+                <div className="flex items-center justify-between">
+                  <Button variant="ghost" onClick={() => handleViewChange('briefs')}>
+                    ← Back to Briefs
+                  </Button>
+                  {currentRole !== 'pm' && (
+                    <Button 
+                      onClick={() => handleSubmit(selectedBrief.id)}
+                      disabled={loading}
+                      className="bg-emerald-500 hover:bg-emerald-600 text-black"
+                    >
+                      Submit Work
+                    </Button>
+                  )}
+                </div>
+
+                <div className="rounded-xl border bg-card p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h1 className="text-2xl font-bold">{selectedBrief.title}</h1>
+                    <span className={`text-xs px-3 py-1 rounded ${
+                      selectedBrief.status === 'active' 
+                        ? 'bg-emerald-500/20 text-emerald-400' 
+                        : 'bg-yellow-500/20 text-yellow-400'
+                    }`}>
+                      {selectedBrief.status}
+                    </span>
+                  </div>
+
+                  {/* Role-specific content */}
+                  <div className="space-y-6">
+                    {currentRole === 'pm' && selectedBrief.content.pm && (
+                      <div className="space-y-4">
+                        <div>
+                          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">Summary</h3>
+                          <p>{selectedBrief.content.pm.summary}</p>
+                        </div>
+                        {selectedBrief.content.pm.userStories.length > 0 && (
+                          <div>
+                            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">User Stories</h3>
+                            <ul className="list-disc list-inside space-y-1">
+                              {selectedBrief.content.pm.userStories.map((story, i) => (
+                                <li key={i}>{story}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {currentRole === 'dev' && selectedBrief.content.dev && (
+                      <div className="space-y-4">
+                        {selectedBrief.content.dev.architecture && (
+                          <div>
+                            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">Architecture</h3>
+                            <div className="font-mono text-sm bg-muted/50 p-4 rounded-lg">
+                              {selectedBrief.content.dev.architecture}
+                            </div>
+                          </div>
+                        )}
+                        {selectedBrief.content.dev.techStack.length > 0 && (
+                          <div>
+                            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">Tech Stack</h3>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedBrief.content.dev.techStack.map((tech, i) => (
+                                <span key={i} className="px-2 py-1 bg-cyan-500/20 text-cyan-400 text-xs rounded">
+                                  {tech}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {currentRole === 'designer' && selectedBrief.content.designer && (
+                      <div className="space-y-4">
+                        {selectedBrief.content.designer.userFlow.length > 0 && (
+                          <div>
+                            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">User Flow</h3>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {selectedBrief.content.designer.userFlow.map((step, i) => (
+                                <span key={i} className="flex items-center gap-2">
+                                  <span className="px-3 py-2 bg-violet-500/20 text-violet-400 text-sm rounded">
+                                    {step}
+                                  </span>
+                                  {i < selectedBrief.content.designer.userFlow.length - 1 && (
+                                    <span className="text-muted-foreground">→</span>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
-              )}
-            </>
-          )}
-
-          {activeBrief && (
-            <BriefView
-              brief={activeBrief}
-              briefContent={activeBrief.content ?? undefined}
-              tasks={tasks.filter((t) => t.briefId === activeBrief.id)}
-              submissions={submissions.filter((s) => s.briefId === activeBrief.id)}
-              activeRole={activeRole}
-              onRoleChange={handleRoleChange}
-              onBack={() => setActiveBriefId(null)}
-              onSimulateSubmission={handleSimulateSubmission}
-              onApproveSubmission={handleApproveSubmission}
-              onRejectSubmission={handleRejectSubmission}
-            />
-          )}
-        </SignedIn>
-      </main>
+              </>
+            )}
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
     </div>
   )
 }
-
-export default App
