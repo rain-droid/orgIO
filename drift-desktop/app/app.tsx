@@ -8,46 +8,64 @@ const AI = lazy(() => import('./components/mainbar/AI').then((module) => ({ defa
 // Auth URL - opens in browser for login
 const AUTH_URL = 'https://34.185.148.16/auth/desktop'
 
-// Login Screen Component - just a button that opens browser
-function LoginScreen({ onLogin }: { onLogin: () => void }) {
+// Login Screen Component - intro -> auth flow
+function LoginScreen() {
+  const [stage, setStage] = useState<'intro' | 'auth'>('intro')
   const [isLoading, setIsLoading] = useState(false)
 
-  const handleLogin = async () => {
+  const handleLogin = () => {
     setIsLoading(true)
-    // Open browser for authentication
     window.api.send('open-auth-url', AUTH_URL)
   }
 
+  const handleContinue = () => {
+    if (stage !== 'intro') return
+    setStage('auth')
+    handleLogin()
+  }
+
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center gap-6 bg-gradient-to-br from-gray-900 to-black">
-      <div className="glass rounded-2xl p-8 flex flex-col items-center gap-6 max-w-md">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-            <span className="text-white text-2xl font-bold">D</span>
+    <div className="login-screen">
+      <div className="login-shell">
+        <div className="login-left">
+          <div className="login-card">
+            <div className="login-logo">
+              <div className="login-logo-mark">D</div>
+              <span>Drift</span>
+            </div>
+
+            <h1 className="login-title">Welcome to Drift</h1>
+            <p className="login-subtitle">The ultimate AI sprint assistant</p>
+
+            <button
+              onClick={stage === 'intro' ? handleContinue : handleLogin}
+              disabled={stage === 'auth' && isLoading}
+              className="login-cta"
+            >
+              {stage === 'intro' ? 'Continue' : isLoading ? 'Opening Browser...' : 'Continue'}
+            </button>
+
+            {stage === 'auth' && (
+              <p className="login-helper">
+                Complete login in your browser. The app will update automatically.
+              </p>
+            )}
           </div>
-          <h1 className="text-3xl font-bold text-white">Drift</h1>
         </div>
-
-        <p className="text-gray-400 text-center">
-          AI-Powered Sprint Planning
-          <br />
-          <span className="text-sm">Sign in to start your session</span>
-        </p>
-
-        <button 
-          onClick={handleLogin}
-          disabled={isLoading}
-          className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
-        >
-          {isLoading ? 'Opening Browser...' : 'Sign In with Drift'}
-        </button>
-
-        {isLoading && (
-          <p className="text-xs text-gray-500 text-center">
-            Complete login in your browser.<br/>
-            The app will update automatically.
-          </p>
-        )}
+        <div className="login-right">
+          <div className="login-preview">
+            <div className="login-preview-pill">Drift overlay</div>
+            <div className="login-preview-card">
+              <div className="login-preview-header">What should I say next?</div>
+              <div className="login-preview-body">
+                Smart suggestions and real-time context, always ready to help.
+              </div>
+            </div>
+            <div className="login-preview-caption">
+              Real-time assistant, always ready to help
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -131,7 +149,7 @@ export default function App() {
   }
 
   if (!isAuthenticated) {
-    return <LoginScreen onLogin={() => {}} />
+    return <LoginScreen />
   }
 
   return <MainApp userEmail={userEmail} onLogout={handleLogout} />

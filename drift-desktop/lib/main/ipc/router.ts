@@ -2,6 +2,8 @@ import { BrowserWindow, ipcMain, screen, desktopCapturer, shell } from 'electron
 import { appState } from '@/lib/state/AppStateMachine'
 import { ShortcutsHelper } from '@/lib/main/shortcuts'
 import { windowRegistry } from '@/lib/main/windowRegistry'
+import { createServer, Server } from 'http'
+import { parse } from 'url'
 
 // Drift Backend API URL
 const DRIFT_API_URL = 'https://34.185.148.16/api'
@@ -48,8 +50,81 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   })
 
   /* ---------------- Auth handlers ---------------- */
+  let authServer: Server | null = null
   ipcMain.on('open-auth-url', (_evt, url: string) => {
-    shell.openExternal(url)
+    // Stop any existing server
+    if (authServer) {
+      authServer.close()
+      authServer = null
+    }
+
+    // Create callback server
+    authServer = createServer((req, res) => {
+      const urlParts = parse(req.url || '', true)
+
+      if (urlParts.pathname === '/callback') {
+        const token = urlParts.query.token as string
+        const email = urlParts.query.email as string
+
+        if (token) {
+          ;(global as any).authToken = token
+          ;(global as any).userEmail = email || 'user@drift.app'
+
+          res.writeHead(200, { 'Content-Type': 'text/html' })
+          res.end(`
+            <html>
+              <head>
+                <style>
+                  body { 
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: center; 
+                    height: 100vh; 
+                    margin: 0;
+                    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                    color: white;
+                  }
+                  .container { text-align: center; }
+                  h1 { color: #4ade80; }
+                </style>
+              </head>
+              <body>
+                <div class="container">
+                  <h1>✓ Connected to Drift!</h1>
+                  <p>You can close this tab and return to the app.</p>
+                </div>
+              </body>
+            </html>
+          `)
+
+          broadcast('auth-token-received', { token, email: email || 'user@drift.app' })
+
+          setTimeout(() => {
+            if (authServer) {
+              authServer.close()
+              authServer = null
+            }
+          }, 1000)
+        } else {
+          res.writeHead(400, { 'Content-Type': 'text/plain' })
+          res.end('Missing token')
+        }
+      } else {
+        res.writeHead(404, { 'Content-Type': 'text/plain' })
+        res.end('Not found')
+      }
+    })
+
+    authServer.listen(0, '127.0.0.1', () => {
+      const address = authServer!.address()
+      if (address && typeof address === 'object') {
+        const port = address.port
+        const callbackUrl = `http://localhost:${port}/callback`
+        const authUrl = `${url}?callback=${encodeURIComponent(callbackUrl)}`
+        shell.openExternal(authUrl)
+      }
+    })
   })
 
   ipcMain.handle('store-auth-token', async (_evt, token: string) => {
