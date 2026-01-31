@@ -5,9 +5,6 @@ from typing import Optional
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
     
-    # Clerk Authentication
-    CLERK_SECRET_KEY: str
-    
     # Supabase Database
     SUPABASE_URL: str
     SUPABASE_KEY: str

@@ -1,10 +1,28 @@
-from clerk_backend_api import Clerk
+import jwt
+import httpx
 from fastapi import HTTPException, status
 from config.settings import settings
-import os
+from typing import Optional
 
-# Initialize Clerk client
-clerk = Clerk(bearer_auth=settings.CLERK_SECRET_KEY)
+# Clerk JWKS endpoint
+CLERK_JWKS_URL = "https://fine-shrew-58.clerk.accounts.dev/.well-known/jwks.json"
+
+# Cache for JWKS
+_jwks_cache: Optional[dict] = None
+
+
+async def get_jwks() -> dict:
+    """Fetch Clerk JWKS (JSON Web Key Set)"""
+    global _jwks_cache
+    
+    if _jwks_cache is not None:
+        return _jwks_cache
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(CLERK_JWKS_URL)
+        response.raise_for_status()
+        _jwks_cache = response.json()
+        return _jwks_cache
 
 
 async def verify_clerk_token(token: str) -> dict:
@@ -15,47 +33,72 @@ async def verify_clerk_token(token: str) -> dict:
         token: JWT token from Authorization header
         
     Returns:
-        dict with userId, orgId, email, name, avatarUrl
+        dict with userId, orgId, email, name
         
     Raises:
         HTTPException: If token is invalid
     """
     try:
-        # Verify the session token
-        session = clerk.sessions.verify_token(token)
+        # Get JWKS
+        jwks = await get_jwks()
         
-        # Get user details
-        user = clerk.users.get(session.user_id)
+        # Get unverified header to find the key
+        unverified_header = jwt.get_unverified_header(token)
         
-        # Get organization (if user is in one)
-        org_id = None
-        if hasattr(user, 'organization_memberships') and user.organization_memberships:
-            org_id = user.organization_memberships[0].organization.id
+        # Find the matching key
+        rsa_key = None
+        for key in jwks.get("keys", []):
+            if key.get("kid") == unverified_header.get("kid"):
+                rsa_key = jwt.algorithms.RSAAlgorithm.from_jwk(key)
+                break
         
-        # Extract email
-        email = None
-        if hasattr(user, 'email_addresses') and user.email_addresses:
-            email = user.email_addresses[0].email_address
+        if rsa_key is None:
+            raise ValueError("No matching key found in JWKS")
         
-        # Build name
-        name = None
-        if hasattr(user, 'first_name') and hasattr(user, 'last_name'):
-            name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+        # Verify and decode the token
+        payload = jwt.decode(
+            token,
+            rsa_key,
+            algorithms=["RS256"],
+            options={"verify_aud": False}  # Clerk tokens don't always have audience
+        )
         
+        # Extract user info from token claims
+        user_id = payload.get("sub")
+        org_id = payload.get("org_id")
+        
+        # Clerk session tokens have limited claims
+        # For full user data, we'd need to call the Clerk API
         return {
-            "userId": user.id,
+            "userId": user_id,
             "orgId": org_id,
-            "email": email,
-            "name": name or email,
-            "avatarUrl": getattr(user, 'image_url', None)
+            "email": payload.get("email"),
+            "name": payload.get("name") or payload.get("username") or user_id,
+            "avatarUrl": payload.get("image_url")
         }
         
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "code": "TOKEN_EXPIRED",
+                "message": "Token has expired"
+            }
+        )
+    except jwt.InvalidTokenError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "code": "INVALID_TOKEN",
+                "message": f"Invalid token: {str(e)}"
+            }
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
                 "code": "UNAUTHORIZED",
-                "message": f"Invalid or expired token: {str(e)}"
+                "message": f"Authentication failed: {str(e)}"
             }
         )
 
