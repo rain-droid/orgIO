@@ -48,6 +48,9 @@ Cargo.lock
 
 # Tauri
 drift-app/src-tauri/target/
+drift-app/src-tauri/gen/
+drift-app/src-tauri/icons/
+drift-app/icon.png
 
 # Misc
 *.local
