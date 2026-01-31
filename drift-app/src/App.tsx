@@ -35,13 +35,14 @@ export default function App() {
     checkAuth()
   }, [])
 
-  // Listen for deep link auth token
+  // Listen for auth token from localhost callback
   useEffect(() => {
     const unsubscribe = listen<string>('auth-token', async (event) => {
       const token = event.payload
-      console.log('Received auth token from deep link')
+      console.log('Received auth token from callback server')
       await invoke('set_auth_token', { token })
       setIsLoggedIn(true)
+      setLoggingIn(false)
     })
     
     return () => {
@@ -81,12 +82,21 @@ export default function App() {
     return () => clearInterval(interval)
   }, [isLoggedIn])
 
+  const [loggingIn, setLoggingIn] = useState(false)
+
   const handleLogin = async () => {
-    // Opens web app desktop auth page, which will redirect back with drift:// deep link
+    setLoggingIn(true)
     try {
-      await open('https://34.185.148.16/auth/desktop')
+      // Start localhost callback server
+      const callbackUrl = await invoke<string>('start_auth_server')
+      console.log('Callback URL:', callbackUrl)
+      
+      // Open browser with callback URL
+      const authUrl = `https://34.185.148.16/auth/desktop?callback=${encodeURIComponent(callbackUrl)}`
+      await open(authUrl)
     } catch (e) {
-      console.error('Failed to open browser:', e)
+      console.error('Failed to start auth:', e)
+      setLoggingIn(false)
     }
   }
 
@@ -142,14 +152,27 @@ export default function App() {
           <h1 className="login-title">DRIFT</h1>
           <p className="login-subtitle">AI-Powered Work Tracking</p>
           
-          <button className="login-btn" onClick={handleLogin}>
-            <span>Log In with Drift</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M5 12h14M12 5l7 7-7 7"/>
-            </svg>
+          <button className="login-btn" onClick={handleLogin} disabled={loggingIn}>
+            {loggingIn ? (
+              <>
+                <svg className="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12"/>
+                </svg>
+                <span>Waiting for login...</span>
+              </>
+            ) : (
+              <>
+                <span>Log In with Drift</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+              </>
+            )}
           </button>
           
-          <p className="login-hint">Opens browser for secure authentication</p>
+          <p className="login-hint">
+            {loggingIn ? 'Complete login in your browser' : 'Opens browser for secure authentication'}
+          </p>
         </div>
       </div>
     )

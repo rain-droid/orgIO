@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useUser, useAuth, SignInButton } from '@clerk/clerk-react'
-import { Loader2, Monitor, Check, ArrowRight } from 'lucide-react'
+import { Loader2, Monitor, Check } from 'lucide-react'
 
 export function DesktopAuth() {
   const { isSignedIn, user } = useUser()
   const { getToken } = useAuth()
   const [status, setStatus] = useState<'login' | 'redirecting' | 'done' | 'error'>('login')
   const [error, setError] = useState<string | null>(null)
+
+  // Get callback URL from query params
+  const urlParams = new URLSearchParams(window.location.search)
+  const callbackUrl = urlParams.get('callback')
 
   useEffect(() => {
     if (!isSignedIn) {
@@ -24,26 +28,24 @@ export function DesktopAuth() {
           return
         }
 
-        // Redirect to deep link with token
-        const deepLink = `drift://auth?token=${encodeURIComponent(token)}`
-        
-        // Try to open the deep link
-        window.location.href = deepLink
-        
-        // Mark as done after a short delay
-        setTimeout(() => {
-          setStatus('done')
-        }, 500)
-        
+        if (callbackUrl) {
+          // Redirect to localhost callback with token
+          const redirectUrl = `${callbackUrl}?token=${encodeURIComponent(token)}`
+          window.location.href = redirectUrl
+        } else {
+          // Fallback: show error
+          setError('No callback URL provided')
+          setStatus('error')
+        }
       } catch (err) {
-        console.error('Failed to redirect to desktop app:', err)
-        setError('Failed to open desktop app')
+        console.error('Failed to redirect:', err)
+        setError('Failed to complete authentication')
         setStatus('error')
       }
     }
 
     redirectToApp()
-  }, [isSignedIn, getToken])
+  }, [isSignedIn, getToken, callbackUrl])
 
   return (
     <div className="min-h-screen bg-[#0a0a0b] flex items-center justify-center">
@@ -55,7 +57,7 @@ export function DesktopAuth() {
         </div>
       </div>
 
-      <div className="relative z-10 text-center p-10 max-w-md">
+      <div className="relative z-10 text-center p-10 max-w-md w-full">
         {/* Logo */}
         <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_20px_60px_rgba(99,102,241,0.4)]">
           <Monitor className="w-10 h-10 text-white" />
@@ -73,7 +75,6 @@ export function DesktopAuth() {
             <SignInButton mode="modal">
               <button className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold text-lg hover:shadow-[0_12px_40px_rgba(99,102,241,0.4)] transition-all hover:-translate-y-0.5">
                 Sign In
-                <ArrowRight className="w-5 h-5" />
               </button>
             </SignInButton>
           </>
@@ -82,7 +83,7 @@ export function DesktopAuth() {
         {status === 'redirecting' && (
           <>
             <p className="text-zinc-400 mb-8">
-              Opening Drift Desktop...
+              Connecting to Drift Desktop...
             </p>
             <div className="flex items-center justify-center gap-3 text-indigo-400">
               <Loader2 className="w-6 h-6 animate-spin" />
@@ -96,12 +97,6 @@ export function DesktopAuth() {
             <p className="text-emerald-400 mb-6 flex items-center justify-center gap-2">
               <Check className="w-5 h-5" />
               Connected! You can close this tab.
-            </p>
-            <p className="text-zinc-500 text-sm">
-              If the app didn't open,{' '}
-              <a href="drift://auth" className="text-indigo-400 hover:underline">
-                click here
-              </a>
             </p>
           </>
         )}
@@ -117,13 +112,10 @@ export function DesktopAuth() {
             >
               Try Again
             </button>
-            <p className="text-zinc-500 text-sm mt-4">
-              Make sure Drift Desktop is installed
-            </p>
           </>
         )}
 
-        {/* User info if signed in */}
+        {/* User info */}
         {isSignedIn && user && status !== 'login' && (
           <div className="mt-8 pt-6 border-t border-zinc-800">
             <div className="flex items-center justify-center gap-3">

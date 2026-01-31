@@ -3,14 +3,6 @@
   "productName": "Drift",
   "version": "0.1.0",
   "identifier": "com.drift.app",
-  "plugins": {
-    "deep-link": {
-      "mobile": [],
-      "desktop": {
-        "schemes": ["drift"]
-      }
-    }
-  },
   "build": {
     "beforeBuildCommand": "npm run build",
     "beforeDevCommand": "npm run dev",
