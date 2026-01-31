@@ -41,5 +41,13 @@ __pycache__/
 venv/
 ENV/
 
+# Rust/Cargo
+target/
+Cargo.lock
+**/*.rs.bk
+
+# Tauri
+drift-app/src-tauri/target/
+
 # Misc
 *.local
