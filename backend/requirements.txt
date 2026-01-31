@@ -1,0 +1,39 @@
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# Data Validation
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Authentication
+clerk-backend-api==0.2.0
+
+# Database
+supabase==2.3.4
+
+# LangChain Core
+langchain==0.1.4
+langchain-core==0.1.14
+langchain-community==0.0.16
+
+# LangChain LLMs
+langchain-openai==0.0.5
+langchain-google-genai==0.0.6
+langchain-anthropic==0.0.1
+
+# Vector Store & Embeddings
+langchain-pinecone==0.0.1
+pinecone-client==3.0.0
+faiss-cpu==1.7.4
+
+# Tools & Agents
+openai==1.10.0
+
+# WebSockets
+websockets==12.0
+
+# Utilities
+python-dotenv==1.0.0
+httpx==0.26.0
