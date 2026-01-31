@@ -1,7 +1,6 @@
 import { useState, lazy, Suspense, useEffect } from 'react'
 import { Mainbar } from './components/mainbar/Mainbar'
 import { useUIState } from './state/UIStateProvider'
-import { shell } from 'electron'
 
 const AI = lazy(() => import('./components/mainbar/AI').then((module) => ({ default: module.AI })))
 
@@ -72,7 +71,7 @@ function LoginScreen() {
 }
 
 // Main App Component
-function MainApp({ userEmail, onLogout }: { userEmail: string; onLogout: () => void }) {
+function MainApp() {
   const isChatPaneVisible = useUIState((state) => state.matches('chat') || state.matches('live'))
   const [isWideChatPane, setIsWideChatPane] = useState(false)
 
@@ -80,17 +79,6 @@ function MainApp({ userEmail, onLogout }: { userEmail: string; onLogout: () => v
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-start gap-1 pt-2">
-      {/* User info bar */}
-      <div className="absolute top-2 right-4 flex items-center gap-2 z-50">
-        <span className="text-xs text-gray-400">{userEmail}</span>
-        <button 
-          onClick={onLogout}
-          className="text-xs text-gray-500 hover:text-white transition-colors"
-        >
-          Sign Out
-        </button>
-      </div>
-
       <Mainbar />
 
       <div
@@ -108,16 +96,13 @@ function MainApp({ userEmail, onLogout }: { userEmail: string; onLogout: () => v
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [userEmail, setUserEmail] = useState('')
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     // Check if we have a stored token
     window.api.invoke('get-auth-token').then((token: string | null) => {
       if (token) {
-        // TODO: Validate token and get user info
         setIsAuthenticated(true)
-        setUserEmail('user@drift.app') // Placeholder
       }
       setIsLoading(false)
     })
@@ -125,7 +110,6 @@ export default function App() {
     // Listen for auth token from callback
     window.api.receive('auth-token-received', (data: { token: string; email: string }) => {
       window.api.invoke('store-auth-token', data.token)
-      setUserEmail(data.email)
       setIsAuthenticated(true)
     })
 
@@ -133,12 +117,6 @@ export default function App() {
       window.api.removeAllListeners('auth-token-received')
     }
   }, [])
-
-  const handleLogout = () => {
-    window.api.invoke('store-auth-token', null)
-    setIsAuthenticated(false)
-    setUserEmail('')
-  }
 
   if (isLoading) {
     return (
@@ -152,5 +130,5 @@ export default function App() {
     return <LoginScreen />
   }
 
-  return <MainApp userEmail={userEmail} onLogout={handleLogout} />
+  return <MainApp />
 }

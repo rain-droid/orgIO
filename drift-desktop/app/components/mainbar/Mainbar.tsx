@@ -68,62 +68,50 @@ export const Mainbar = () => {
   }
 
   return (
-    <div className="pl-5 pr-5 glass rounded-full font-sans flex-none w-[33.333vw] h-[5.5vh] max-w-[33.333vw] max-h-[5.5vh]">
+    <div className="pl-3 pr-3 glass rounded-[8px] font-sans flex-none w-[33.333vw] h-[40px] max-w-[33.333vw] max-h-[40px]">
       <div className="flex items-center justify-between w-full h-full">
-        {/* Left - Chat button */}
-        <div className="flex items-center gap-2">
+        {/* Left - Record, Chat, Hide aligned together */}
+        <div className="flex items-center gap-1 flex-1 justify-start">
+          <Button
+            variant={isRecording ? 'destructive' : 'ghost'}
+            size="xs"
+            onClick={handleRecordClick}
+          >
+            <Circle
+              className={isRecording ? 'animate-pulse text-red-500 fill-red-500' : ''}
+              size={12}
+            />
+            <span>{formatTime(recordingTime)}</span>
+          </Button>
           <Button
             variant={chatActive ? 'secondary' : 'ghost'}
-            size="sm"
+            size="xs"
             onClick={handleChatClick}
           >
             <span>Chat</span>
             <Command />
             <CornerDownLeft />
           </Button>
-        </div>
-
-        {/* Middle - Hide */}
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="xs">
             <span>Hide</span>
             <Command />
             <Space />
           </Button>
         </div>
 
-        {/* Recording indicator */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant={isRecording ? 'destructive' : 'ghost'}
-            size="sm"
-            onClick={handleRecordClick}
-          >
-            <span>{formatTime(recordingTime)}</span>
-            <Circle
-              className={isRecording ? 'animate-pulse text-red-500 fill-red-500' : ''}
-              size={12}
-            />
-          </Button>
-        </div>
-
-        {/* Invisibility Toggle */}
-        <div className="flex items-center gap-2">
+        {/* Right - Invisibility Toggle and Quit */}
+        <div className="flex items-center gap-1 justify-end">
           <Button
             variant="ghost"
-            size="sm"
+            size="xs"
             onClick={handleInvisibilityToggle}
             title={isInvisible ? 'Enable invisibility' : 'Disable invisibility'}
           >
             {isInvisible ? <Eye /> : <EyeOff />}
           </Button>
-        </div>
-
-        {/* Quit button */}
-        <div className="flex items-center gap-2">
           <Button
             variant="ghost"
-            size="sm"
+            size="xs"
             onClick={() => window.api.send('quit-app')}
             title="Quit App"
           >
