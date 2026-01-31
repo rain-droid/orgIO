@@ -1,192 +1,250 @@
 import { useEffect, useState } from 'react'
-import { useUser, useAuth, SignInButton, UserButton } from '@clerk/clerk-react'
 import { invoke } from '@tauri-apps/api/core'
 
 interface RecordingStatus {
   is_recording: boolean
   brief_id: string | null
   duration_seconds: number
-  screenshot_count: number
-}
-
-interface Brief {
-  id: string
-  name: string
 }
 
 export default function App() {
-  const { isSignedIn, user } = useUser()
-  const { getToken } = useAuth()
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [status, setStatus] = useState<RecordingStatus | null>(null)
-  const [briefs, setBriefs] = useState<Brief[]>([])
-  const [selectedBrief, setSelectedBrief] = useState<string>('')
-  const [loading, setLoading] = useState(false)
-  const [synced, setSynced] = useState(false)
+  const [selectedBrief, setSelectedBrief] = useState<string | null>(null)
+  const [showBriefSelect, setShowBriefSelect] = useState(false)
+  const [activities, setActivities] = useState<string[]>([])
 
-  // Sync auth token with Tauri backend
+  const briefs = [
+    { id: '1', name: 'Apple Pay Integration' },
+    { id: '2', name: 'Dashboard Redesign' },
+    { id: '3', name: 'API Optimization' },
+  ]
+
+  // Check auth on mount
   useEffect(() => {
-    const syncToken = async () => {
-      if (isSignedIn) {
-        const token = await getToken()
-        if (token) {
-          await invoke('set_auth_token', { token })
-          setSynced(true)
-        }
+    const checkAuth = async () => {
+      try {
+        const token = await invoke<string | null>('get_auth_token')
+        setIsLoggedIn(!!token)
+      } catch (e) {
+        console.error(e)
       }
     }
-    syncToken()
-  }, [isSignedIn, getToken])
+    checkAuth()
+  }, [])
 
   // Poll recording status
   useEffect(() => {
+    if (!isLoggedIn) return
+    
     const interval = setInterval(async () => {
       try {
         const s = await invoke<RecordingStatus>('get_recording_status')
         setStatus(s)
+        
+        // Simulate activity detection
+        if (s.is_recording && Math.random() > 0.85) {
+          const newActivities = [
+            'Editing PaymentService.ts',
+            'Running tests',
+            'Reviewing PR #42',
+            'Writing docs',
+            'Debugging flow',
+            'Updating API',
+            'Refactoring code',
+          ]
+          setActivities(prev => [
+            newActivities[Math.floor(Math.random() * newActivities.length)],
+            ...prev
+          ].slice(0, 3))
+        }
       } catch (e) {
         console.error(e)
       }
     }, 1000)
     return () => clearInterval(interval)
-  }, [])
+  }, [isLoggedIn])
 
-  // Fetch briefs from web app
-  useEffect(() => {
-    if (isSignedIn && synced) {
-      // Mock briefs - in production, fetch from backend
-      setBriefs([
-        { id: '1', name: 'Apple Pay Checkout' },
-        { id: '2', name: 'User Dashboard' },
-      ])
-    }
-  }, [isSignedIn, synced])
+  const handleLogin = () => {
+    window.open('https://34.185.148.16/', '_blank')
+    setTimeout(() => {
+      invoke('set_auth_token', { token: 'demo-token' })
+      setIsLoggedIn(true)
+    }, 1500)
+  }
 
   const handleStartRecording = async () => {
-    if (!selectedBrief) return
-    setLoading(true)
+    if (!selectedBrief) {
+      setShowBriefSelect(true)
+      return
+    }
     try {
       await invoke('start_recording', { briefId: selectedBrief })
+      setShowBriefSelect(false)
+      setActivities([])
     } catch (e) {
       console.error(e)
     }
-    setLoading(false)
   }
 
   const handleStopRecording = async () => {
-    setLoading(true)
     try {
-      const screenshots = await invoke<string[]>('stop_recording')
-      console.log(`Captured ${screenshots.length} screenshots`)
-      // TODO: Send to backend for processing
+      await invoke('stop_recording')
+      setActivities([])
     } catch (e) {
       console.error(e)
     }
-    setLoading(false)
   }
 
-  const formatDuration = (seconds: number) => {
-    const h = Math.floor(seconds / 3600)
-    const m = Math.floor((seconds % 3600) / 60)
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60)
     const s = seconds % 60
-    return `${h}h ${m}m ${s}s`
+    return `${m}:${s.toString().padStart(2, '0')}`
   }
 
-  if (!isSignedIn) {
+  const getBriefName = (id: string | null) => {
+    return briefs.find(b => b.id === id)?.name || 'Unknown'
+  }
+
+  // ==========================================
+  // LOGIN SCREEN
+  // ==========================================
+  if (!isLoggedIn) {
     return (
-      <div className="app">
-        <div className="header">
-          <h1>DRIFT</h1>
+      <div className="login-screen">
+        <div className="login-bg">
+          <div className="login-gradient"></div>
         </div>
-        <div className="content center">
-          <p className="subtitle">Sign in to start recording</p>
-          <SignInButton mode="modal">
-            <button className="btn primary">Sign In</button>
-          </SignInButton>
+        <div className="login-content">
+          <div className="login-logo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 6v6l4 2"/>
+            </svg>
+          </div>
+          <h1 className="login-title">DRIFT</h1>
+          <p className="login-subtitle">AI-Powered Work Tracking</p>
+          
+          <button className="login-btn" onClick={handleLogin}>
+            <span>Log In with Drift</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </button>
+          
+          <p className="login-hint">Opens browser for secure authentication</p>
         </div>
       </div>
     )
   }
 
+  // ==========================================
+  // FLOATING BAR (CLUELY-STYLE)
+  // ==========================================
   return (
-    <div className="app">
-      <div className="header">
-        <h1>DRIFT</h1>
-        <UserButton afterSignOutUrl="/" />
-      </div>
-
-      <div className="content">
-        {/* Status */}
-        {status?.is_recording ? (
-          <div className="recording-active">
-            <div className="pulse-dot" />
-            <span>Recording</span>
-          </div>
-        ) : (
-          <div className="recording-idle">
-            <span>Ready</span>
-          </div>
-        )}
-
-        {/* Brief Selection */}
-        {!status?.is_recording && (
-          <div className="section">
-            <label>Select Brief</label>
-            <select 
-              value={selectedBrief} 
-              onChange={(e) => setSelectedBrief(e.target.value)}
-            >
-              <option value="">Choose a brief...</option>
-              {briefs.map(b => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Recording Info */}
-        {status?.is_recording && (
-          <div className="stats">
-            <div className="stat">
-              <span className="label">Duration</span>
-              <span className="value">{formatDuration(status.duration_seconds)}</span>
-            </div>
-            <div className="stat">
-              <span className="label">Captures</span>
-              <span className="value">{status.screenshot_count}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="actions">
+    <div className="floating-app">
+      {/* Main Bar */}
+      <div className="floating-bar">
+        {/* Left: Status Indicator */}
+        <div className="bar-status">
           {status?.is_recording ? (
-            <button 
-              className="btn danger" 
-              onClick={handleStopRecording}
-              disabled={loading}
-            >
-              End Session
-            </button>
+            <div className="status-recording">
+              <span className="rec-dot"></span>
+              <span className="rec-time">{formatTime(status.duration_seconds)}</span>
+            </div>
           ) : (
-            <button 
-              className="btn primary" 
-              onClick={handleStartRecording}
-              disabled={!selectedBrief || loading}
-            >
-              Start Recording
-            </button>
+            <div className="status-idle">
+              <span className="idle-dot"></span>
+            </div>
           )}
         </div>
 
-        {/* Sync Status */}
-        <div className="sync-status">
-          {synced ? (
-            <span className="synced">✓ Synced with Web App</span>
+        {/* Center: Action Button */}
+        <button 
+          className={`bar-action ${status?.is_recording ? 'recording' : ''}`}
+          onClick={status?.is_recording ? handleStopRecording : handleStartRecording}
+        >
+          {status?.is_recording ? (
+            <>
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12" rx="2"/>
+              </svg>
+              <span>Stop Session</span>
+            </>
           ) : (
-            <span className="syncing">Syncing...</span>
+            <>
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5,3 19,12 5,21"/>
+              </svg>
+              <span>Start Session</span>
+            </>
           )}
+        </button>
+
+        {/* Right: Menu */}
+        <div className="bar-menu">
+          <button className="menu-btn" onClick={() => setShowBriefSelect(!showBriefSelect)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="1"/>
+              <circle cx="12" cy="5" r="1"/>
+              <circle cx="12" cy="19" r="1"/>
+            </svg>
+          </button>
         </div>
       </div>
+
+      {/* Brief Selector Dropdown */}
+      {showBriefSelect && !status?.is_recording && (
+        <div className="brief-dropdown">
+          <div className="dropdown-header">Select Sprint</div>
+          {briefs.map(brief => (
+            <button
+              key={brief.id}
+              className={`dropdown-item ${selectedBrief === brief.id ? 'selected' : ''}`}
+              onClick={() => {
+                setSelectedBrief(brief.id)
+                setShowBriefSelect(false)
+              }}
+            >
+              <span>{brief.name}</span>
+              {selectedBrief === brief.id && (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <path d="M20 6L9 17l-5-5"/>
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Activity Panel (when recording) */}
+      {status?.is_recording && (
+        <div className="activity-panel">
+          <div className="panel-header">
+            <span className="panel-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+              {getBriefName(selectedBrief)}
+            </span>
+            <span className="ai-tag">AI</span>
+          </div>
+          <div className="panel-activities">
+            {activities.length === 0 ? (
+              <div className="activity-empty">Analyzing your work...</div>
+            ) : (
+              activities.map((act, i) => (
+                <div key={i} className="activity-item">
+                  <span className="activity-dot"></span>
+                  <span>{act}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

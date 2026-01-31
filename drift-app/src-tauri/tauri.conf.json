@@ -3,6 +3,14 @@
   "productName": "Drift",
   "version": "0.1.0",
   "identifier": "com.drift.app",
+  "plugins": {
+    "deep-link": {
+      "mobile": [],
+      "desktop": {
+        "schemes": ["drift"]
+      }
+    }
+  },
   "build": {
     "beforeBuildCommand": "npm run build",
     "beforeDevCommand": "npm run dev",
@@ -13,11 +21,15 @@
     "windows": [
       {
         "title": "Drift",
-        "width": 400,
-        "height": 600,
+        "width": 380,
+        "height": 500,
+        "minWidth": 320,
+        "minHeight": 200,
         "resizable": true,
         "fullscreen": false,
-        "center": true
+        "center": true,
+        "decorations": true,
+        "alwaysOnTop": false
       }
     ],
     "security": {

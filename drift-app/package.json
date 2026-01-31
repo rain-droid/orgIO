@@ -10,8 +10,8 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@clerk/clerk-react": "^5.0.0",
     "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-shell": "^2.3.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
