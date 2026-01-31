@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 
 interface RecordingStatus {
   is_recording: boolean
@@ -31,6 +32,20 @@ export default function App() {
       }
     }
     checkAuth()
+  }, [])
+
+  // Listen for deep link auth token
+  useEffect(() => {
+    const unsubscribe = listen<string>('auth-token', async (event) => {
+      const token = event.payload
+      console.log('Received auth token from deep link')
+      await invoke('set_auth_token', { token })
+      setIsLoggedIn(true)
+    })
+    
+    return () => {
+      unsubscribe.then(fn => fn())
+    }
   }, [])
 
   // Poll recording status
@@ -66,11 +81,8 @@ export default function App() {
   }, [isLoggedIn])
 
   const handleLogin = () => {
-    window.open('https://34.185.148.16/', '_blank')
-    setTimeout(() => {
-      invoke('set_auth_token', { token: 'demo-token' })
-      setIsLoggedIn(true)
-    }, 1500)
+    // Opens web app desktop auth page, which will redirect back with drift:// deep link
+    window.open('https://34.185.148.16/auth/desktop', '_blank')
   }
 
   const handleStartRecording = async () => {

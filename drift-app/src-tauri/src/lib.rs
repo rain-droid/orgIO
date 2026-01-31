@@ -1,6 +1,6 @@
 use serde::Serialize;
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{Emitter, State};
 
 // ============================================
 // STATE
@@ -95,6 +95,41 @@ fn get_auth_token(state: State<AppState>) -> Option<String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_deep_link::init())
+        .setup(|app| {
+            // Handle deep link URLs (drift://auth?token=xxx)
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                
+                let handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    let urls = event.urls();
+                    for url in urls {
+                        let url_str = url.as_str();
+                        println!("Deep link received: {}", url_str);
+                        
+                        // Parse auth token from URL
+                        if url_str.starts_with("drift://auth") {
+                            if let Some(token) = url_str
+                                .split("token=")
+                                .nth(1)
+                                .map(|t| t.split('&').next().unwrap_or(t))
+                            {
+                                let decoded = urlencoding::decode(token)
+                                    .unwrap_or_else(|_| token.into())
+                                    .to_string();
+                                
+                                // Emit to frontend
+                                let _ = handle.emit("auth-token", decoded);
+                            }
+                        }
+                    }
+                });
+            }
+            
+            Ok(())
+        })
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             get_recording_status,

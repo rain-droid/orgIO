@@ -3,6 +3,7 @@ import { useUser, useAuth, SignInButton, UserButton } from '@clerk/clerk-react'
 import { AppSidebar } from '@/components/app-sidebar'
 import { Onboarding } from '@/components/onboarding'
 import { BriefPage } from '@/pages/BriefPage'
+import { DesktopAuth } from '@/pages/DesktopAuth'
 import {
   SidebarInset,
   SidebarProvider,
@@ -34,6 +35,11 @@ import {
 type View = 'home' | 'brief' | 'reviews'
 
 export default function App() {
+  // Handle /auth/desktop route for desktop app authentication
+  if (window.location.pathname === '/auth/desktop') {
+    return <DesktopAuth />
+  }
+
   const { isSignedIn, user: clerkUser } = useUser()
   const { orgId } = useAuth()
 
