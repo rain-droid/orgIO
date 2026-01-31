@@ -25,6 +25,7 @@ function App() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [activeBriefId, setActiveBriefId] = useState<string | null>(null)
+  const [activeNav, setActiveNav] = useState<'home' | 'briefs' | 'reviews'>('home')
   const [createName, setCreateName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -70,7 +71,7 @@ function App() {
   }, [driftUser])
 
   const activeBrief = useMemo(
-    () => briefs.find((brief) => brief.id === activeBriefId) ?? null,
+    () => briefs.find((b) => b.id === activeBriefId) ?? null,
     [briefs, activeBriefId]
   )
 
@@ -188,178 +189,285 @@ function App() {
   }
 
   return (
-    <div className="app">
-      <div className="main">
-        <header className="topbar">
-          <div className="topbar-left">
-            <div className="brand">DRIFT</div>
+    <div className="app-layout">
+      {/* Sidebar */}
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <div className="logo">
+            <span className="logo-dot"></span>
+            <span className="logo-text">DRIFT</span>
           </div>
-          <div className="topbar-actions">
-            <SignedIn>
-              <UserButton />
-            </SignedIn>
-            <SignedOut>
-              <SignInButton mode="modal">
-                <button className="btn primary">Sign in</button>
-              </SignInButton>
-            </SignedOut>
+        </div>
+
+        <SignedIn>
+          <nav className="sidebar-nav">
+            <button 
+              className={`nav-item ${activeNav === 'home' && !activeBrief ? 'active' : ''}`}
+              onClick={() => { setActiveNav('home'); setActiveBriefId(null); }}
+            >
+              <svg className="nav-icon" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 1L1 6v9h5V10h4v5h5V6L8 1z"/>
+              </svg>
+              Home
+            </button>
+            <button 
+              className={`nav-item ${activeNav === 'briefs' ? 'active' : ''}`}
+              onClick={() => { setActiveNav('briefs'); setActiveBriefId(null); }}
+            >
+              <svg className="nav-icon" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M2 2h12v2H2V2zm0 4h12v2H2V6zm0 4h8v2H2v-2z"/>
+              </svg>
+              Briefs
+              {briefs.length > 0 && <span className="nav-badge">{briefs.length}</span>}
+            </button>
+            <button 
+              className={`nav-item ${activeNav === 'reviews' ? 'active' : ''}`}
+              onClick={() => { setActiveNav('reviews'); setActiveBriefId(null); }}
+            >
+              <svg className="nav-icon" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 0a8 8 0 100 16A8 8 0 008 0zm1 11H7V9h2v2zm0-4H7V3h2v4z"/>
+              </svg>
+              Reviews
+              {pendingSubmissions.length > 0 && (
+                <span className="nav-badge warning">{pendingSubmissions.length}</span>
+              )}
+            </button>
+          </nav>
+
+          <div className="sidebar-section">
+            <div className="sidebar-section-title">Your Role</div>
+            <div className="role-switcher">
+              {roles.map((role) => (
+                <button
+                  key={role}
+                  className={`role-btn ${activeRole === role ? `active role-${role}` : ''}`}
+                  onClick={() => handleRoleChange(role)}
+                >
+                  {role.toUpperCase()}
+                </button>
+              ))}
+            </div>
           </div>
-        </header>
+        </SignedIn>
 
-        <div className="container">
-          {error && <div className="error-banner">{error}</div>}
-          {loading && <div className="loading-banner">Loading...</div>}
-
-          <SignedOut>
-            <div className="empty">Sign in to view your workspace</div>
-          </SignedOut>
-
+        <div className="sidebar-footer">
           <SignedIn>
-            {!activeBrief && (
-              <>
-                {/* Create Input */}
-                <div className="create-input-wrapper">
-                  <div className="create-input">
+            <div className="user-menu">
+              <UserButton />
+              <span className="user-name">{clerkUser?.firstName || 'User'}</span>
+            </div>
+          </SignedIn>
+          <SignedOut>
+            <SignInButton mode="modal">
+              <button className="btn-signin">Sign in</button>
+            </SignInButton>
+          </SignedOut>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="main-content">
+        {error && <div className="toast error">{error}</div>}
+        {loading && <div className="toast loading">Loading...</div>}
+
+        <SignedOut>
+          <div className="auth-prompt">
+            <h1>Welcome to Drift</h1>
+            <p>AI-powered sprint planning with personalized role views</p>
+            <SignInButton mode="modal">
+              <button className="btn primary large">Get Started</button>
+            </SignInButton>
+          </div>
+        </SignedOut>
+
+        <SignedIn>
+          {!activeBrief && (
+            <>
+              {/* Page Header */}
+              <header className="page-header">
+                <div className="page-title">
+                  <h1>{activeNav === 'home' ? 'Dashboard' : activeNav === 'briefs' ? 'Briefs' : 'Reviews'}</h1>
+                  <p className="page-subtitle">
+                    {activeNav === 'home' && 'Your sprint planning overview'}
+                    {activeNav === 'briefs' && 'Manage your team briefs'}
+                    {activeNav === 'reviews' && 'Review submitted work'}
+                  </p>
+                </div>
+                <div className="page-actions">
+                  <div className="create-bar">
                     <input
                       type="text"
-                      placeholder="Create a new brief..."
+                      placeholder="Create new brief..."
                       value={createName}
                       onChange={(e) => setCreateName(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleCreateBrief()}
                     />
-                    <div className="create-input-meta">
-                      <span className="meta-tag">
-                        <span className="status-dot running" />
-                        {driftUser?.role?.toUpperCase() || 'PM'}
-                      </span>
-                    </div>
                     <button 
-                      className="create-btn" 
+                      className="btn primary"
                       onClick={handleCreateBrief}
                       disabled={!createName.trim()}
                     >
-                      →
+                      Create
                     </button>
                   </div>
                 </div>
+              </header>
 
-                {/* Two Column Layout */}
-                <div className="columns">
-                  {/* Active Briefs */}
-                  <div className="column">
-                    <div className="column-header">
-                      <div>
-                        <div className="column-title">
-                          Active Briefs <span className="count">{briefs.length}</span>
-                        </div>
-                        <div className="column-subtitle">Your sprint planning briefs</div>
-                      </div>
-                      <button className="column-action">All →</button>
+              {/* Dashboard Content */}
+              {activeNav === 'home' && (
+                <div className="dashboard-grid">
+                  {/* Stats Row */}
+                  <div className="stats-row">
+                    <div className="stat-card">
+                      <div className="stat-value">{briefs.length}</div>
+                      <div className="stat-label">Active Briefs</div>
                     </div>
-                    <div className="item-list">
-                      {briefs.length === 0 && (
-                        <div className="empty">No briefs yet</div>
-                      )}
-                      {briefs.map((brief) => (
-                        <div
-                          key={brief.id}
-                          className="item-card"
-                          onClick={() => setActiveBriefId(brief.id)}
-                        >
-                          <div className="item-icon running">
-                            <span className="status-dot running" />
-                          </div>
-                          <div className="item-content">
-                            <div className="item-title">{brief.name}</div>
-                            <div className="item-meta">
-                              <span>Just now</span>
-                              <span className="item-meta-sep">•</span>
-                              <span>{brief.createdBy}</span>
-                            </div>
-                          </div>
+                    <div className="stat-card">
+                      <div className="stat-value">{pendingSubmissions.length}</div>
+                      <div className="stat-label">Pending Reviews</div>
+                    </div>
+                    <div className="stat-card">
+                      <div className="stat-value">{tasks.filter(t => t.status === 'done').length}</div>
+                      <div className="stat-label">Tasks Done</div>
+                    </div>
+                    <div className="stat-card">
+                      <div className="stat-value">{tasks.length}</div>
+                      <div className="stat-label">Total Tasks</div>
+                    </div>
+                  </div>
+
+                  {/* Recent Activity */}
+                  <div className="content-section">
+                    <div className="section-header">
+                      <h2>Recent Briefs</h2>
+                      <button className="link-btn" onClick={() => setActiveNav('briefs')}>View all →</button>
+                    </div>
+                    <div className="list">
+                      {briefs.length === 0 ? (
+                        <div className="empty-state">
+                          <p>No briefs yet. Create your first brief to get started.</p>
                         </div>
-                      ))}
+                      ) : (
+                        briefs.slice(0, 5).map((brief) => (
+                          <div key={brief.id} className="list-item" onClick={() => setActiveBriefId(brief.id)}>
+                            <div className="list-item-icon">
+                              <span className="status-indicator active"></span>
+                            </div>
+                            <div className="list-item-content">
+                              <div className="list-item-title">{brief.name}</div>
+                              <div className="list-item-meta">Created by {brief.createdBy}</div>
+                            </div>
+                            <div className="list-item-action">→</div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
 
                   {/* Pending Reviews */}
-                  <div className="column">
-                    <div className="column-header">
-                      <div>
-                        <div className="column-title">
-                          Submissions to Review <span className="count">{pendingSubmissions.length}</span>
-                        </div>
-                        <div className="column-subtitle">Requires your attention</div>
-                      </div>
-                      <button className="column-action">All →</button>
+                  <div className="content-section">
+                    <div className="section-header">
+                      <h2>Pending Reviews</h2>
+                      <button className="link-btn" onClick={() => setActiveNav('reviews')}>View all →</button>
                     </div>
-                    <div className="item-list">
-                      {pendingSubmissions.length === 0 && (
-                        <div className="empty">No pending reviews</div>
-                      )}
-                      {pendingSubmissions.map((sub) => (
-                        <div
-                          key={sub.id}
-                          className="item-card"
-                          onClick={() => setActiveBriefId(sub.briefId)}
-                        >
-                          <div className="item-icon pending">
-                            <span className="status-dot pending" />
+                    <div className="list">
+                      {pendingSubmissions.length === 0 ? (
+                        <div className="empty-state">
+                          <p>No pending reviews.</p>
+                        </div>
+                      ) : (
+                        pendingSubmissions.slice(0, 5).map((sub) => (
+                          <div key={sub.id} className="list-item" onClick={() => setActiveBriefId(sub.briefId)}>
+                            <div className="list-item-icon">
+                              <span className="status-indicator pending"></span>
+                            </div>
+                            <div className="list-item-content">
+                              <div className="list-item-title">{sub.userName}</div>
+                              <div className="list-item-meta">{sub.summaryLines[0]}</div>
+                            </div>
+                            <span className={`role-tag role-${sub.role}`}>{sub.role}</span>
                           </div>
-                          <div className="item-content">
-                            <div className="item-title">{sub.userName} submitted work</div>
-                            <div className="item-meta">
-                              <span>{sub.summaryLines[0]}</span>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Briefs List */}
+              {activeNav === 'briefs' && (
+                <div className="content-section full">
+                  <div className="list">
+                    {briefs.length === 0 ? (
+                      <div className="empty-state large">
+                        <h3>No briefs yet</h3>
+                        <p>Create your first brief to start sprint planning with your team.</p>
+                      </div>
+                    ) : (
+                      briefs.map((brief) => (
+                        <div key={brief.id} className="list-item" onClick={() => setActiveBriefId(brief.id)}>
+                          <div className="list-item-icon">
+                            <span className="status-indicator active"></span>
+                          </div>
+                          <div className="list-item-content">
+                            <div className="list-item-title">{brief.name}</div>
+                            <div className="list-item-meta">
+                              Created by {brief.createdBy} • {tasks.filter(t => t.briefId === brief.id).length} tasks
                             </div>
                           </div>
-                          <span className={`pill role-${sub.role}`}>
-                            {sub.role.toUpperCase()}
-                          </span>
+                          <div className="list-item-action">→</div>
                         </div>
-                      ))}
-                    </div>
+                      ))
+                    )}
                   </div>
                 </div>
+              )}
 
-                {/* Role Pills */}
-                <div className="section">
-                  <div className="section-header">
-                    <div className="section-title">
-                      Your Role <span className="count">Switch perspective</span>
-                    </div>
-                  </div>
-                  <div className="role-tabs">
-                    {roles.map((role) => (
-                      <button
-                        key={role}
-                        className={`tab ${activeRole === role ? `active role-${role}` : ''}`}
-                        onClick={() => handleRoleChange(role)}
-                      >
-                        {role.toUpperCase()}
-                      </button>
-                    ))}
+              {/* Reviews List */}
+              {activeNav === 'reviews' && (
+                <div className="content-section full">
+                  <div className="list">
+                    {pendingSubmissions.length === 0 ? (
+                      <div className="empty-state large">
+                        <h3>All caught up!</h3>
+                        <p>No pending submissions to review.</p>
+                      </div>
+                    ) : (
+                      pendingSubmissions.map((sub) => (
+                        <div key={sub.id} className="list-item" onClick={() => setActiveBriefId(sub.briefId)}>
+                          <div className="list-item-icon">
+                            <span className="status-indicator pending"></span>
+                          </div>
+                          <div className="list-item-content">
+                            <div className="list-item-title">{sub.userName} submitted work</div>
+                            <div className="list-item-meta">{sub.summaryLines.join(' • ')}</div>
+                          </div>
+                          <span className={`role-tag role-${sub.role}`}>{sub.role}</span>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
-              </>
-            )}
+              )}
+            </>
+          )}
 
-            {activeBrief && (
-              <BriefView
-                brief={activeBrief}
-                briefContent={activeBrief.content ?? undefined}
-                tasks={tasks.filter((t) => t.briefId === activeBrief.id)}
-                submissions={submissions.filter((s) => s.briefId === activeBrief.id)}
-                activeRole={activeRole}
-                onRoleChange={handleRoleChange}
-                onBack={() => setActiveBriefId(null)}
-                onSimulateSubmission={handleSimulateSubmission}
-                onApproveSubmission={handleApproveSubmission}
-                onRejectSubmission={handleRejectSubmission}
-              />
-            )}
-          </SignedIn>
-        </div>
-      </div>
+          {activeBrief && (
+            <BriefView
+              brief={activeBrief}
+              briefContent={activeBrief.content ?? undefined}
+              tasks={tasks.filter((t) => t.briefId === activeBrief.id)}
+              submissions={submissions.filter((s) => s.briefId === activeBrief.id)}
+              activeRole={activeRole}
+              onRoleChange={handleRoleChange}
+              onBack={() => setActiveBriefId(null)}
+              onSimulateSubmission={handleSimulateSubmission}
+              onApproveSubmission={handleApproveSubmission}
+              onRejectSubmission={handleRejectSubmission}
+            />
+          )}
+        </SignedIn>
+      </main>
     </div>
   )
 }
