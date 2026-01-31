@@ -61,10 +61,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       // Sync user first
       await syncUser({
         id: user.id,
-        orgId: orgId,
+        orgId: orgId ?? null,
         email: user.primaryEmailAddress?.emailAddress || '',
         name: user.fullName || user.username || 'User',
-        avatarUrl: user.imageUrl,
+        avatarUrl: user.imageUrl ?? null,
       })
       // Then update role
       await updateUserRole(user.id, role)
