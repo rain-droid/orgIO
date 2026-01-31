@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useUser, useAuth, SignInButton, UserButton, OrganizationSwitcher } from '@clerk/clerk-react'
+import { useUser, useAuth, SignInButton, UserButton } from '@clerk/clerk-react'
 import { AppSidebar } from '@/components/app-sidebar'
+import { Onboarding } from '@/components/onboarding'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -24,7 +25,6 @@ import {
   fetchSubmissions,
   createSubmission,
   updateSubmissionStatus,
-  syncUser,
   fetchUser,
   updateUserRole,
 } from './lib/data'
@@ -44,44 +44,62 @@ export default function App() {
   const [newBriefName, setNewBriefName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [needsOnboarding, setNeedsOnboarding] = useState(false)
+  const [checkingUser, setCheckingUser] = useState(true)
 
   const currentRole: Role = driftUser?.role || 'dev'
 
-  // Load data
+  // Check if user exists and needs onboarding
   useEffect(() => {
-    if (!isSignedIn || !clerkUser || !orgId) return
+    if (!isSignedIn || !clerkUser || !orgId) {
+      setCheckingUser(false)
+      return
+    }
 
-    const loadData = async () => {
-      setLoading(true)
+    const checkUser = async () => {
       try {
-        await syncUser({
-          id: clerkUser.id,
-          orgId: orgId,
-          email: clerkUser.primaryEmailAddress?.emailAddress || '',
-          name: clerkUser.fullName || clerkUser.username || 'User',
-          avatarUrl: clerkUser.imageUrl,
-        })
-        const [briefsData, userData] = await Promise.all([
-          fetchBriefs(orgId),
-          fetchUser(clerkUser.id),
-        ])
-        setBriefs(briefsData)
-        setDriftUser(userData)
-        
-        // Fetch submissions for all briefs
-        if (briefsData.length > 0) {
-          const briefIds = briefsData.map(b => b.id)
-          const subsData = await fetchSubmissions(briefIds)
-          setSubmissions(subsData)
+        const userData = await fetchUser(clerkUser.id)
+        if (!userData) {
+          setNeedsOnboarding(true)
+        } else {
+          setDriftUser(userData)
+          // Load data
+          const briefsData = await fetchBriefs(orgId)
+          setBriefs(briefsData)
+          if (briefsData.length > 0) {
+            const briefIds = briefsData.map(b => b.id)
+            const subsData = await fetchSubmissions(briefIds)
+            setSubmissions(subsData)
+          }
         }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load data')
+      } catch {
+        // User doesn't exist, needs onboarding
+        setNeedsOnboarding(true)
       } finally {
-        setLoading(false)
+        setCheckingUser(false)
       }
     }
-    loadData()
+    checkUser()
   }, [isSignedIn, clerkUser, orgId])
+
+  const handleOnboardingComplete = async () => {
+    if (!clerkUser || !orgId) return
+    setNeedsOnboarding(false)
+    setCheckingUser(true)
+    try {
+      const userData = await fetchUser(clerkUser.id)
+      setDriftUser(userData)
+      const briefsData = await fetchBriefs(orgId)
+      setBriefs(briefsData)
+      if (briefsData.length > 0) {
+        const briefIds = briefsData.map(b => b.id)
+        const subsData = await fetchSubmissions(briefIds)
+        setSubmissions(subsData)
+      }
+    } finally {
+      setCheckingUser(false)
+    }
+  }
 
   const handleCreateBrief = async () => {
     if (!newBriefName.trim() || !orgId || !clerkUser) return
@@ -194,35 +212,21 @@ export default function App() {
     )
   }
 
-  // No org selected
-  if (!orgId) {
+  // Loading
+  if (checkingUser) {
     return (
       <div className="dark min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-6">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="bg-emerald-500 text-black flex aspect-square size-12 items-center justify-center rounded-xl">
-              <FileText className="size-6" />
-            </div>
-            <h1 className="text-3xl font-bold">Drift</h1>
-          </div>
-          <h2 className="text-xl font-semibold">Select or Create an Organization</h2>
-          <p className="text-muted-foreground">You need an organization to use Drift</p>
-          <div className="flex justify-center">
-            <OrganizationSwitcher 
-              appearance={{
-                elements: {
-                  rootBox: "flex justify-center",
-                  organizationSwitcherTrigger: "px-4 py-2 rounded-lg border border-border bg-card hover:bg-accent transition-colors"
-                }
-              }}
-              createOrganizationMode="modal"
-              afterCreateOrganizationUrl="/"
-              afterSelectOrganizationUrl="/"
-            />
-          </div>
+        <div className="text-center space-y-4">
+          <div className="size-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
     )
+  }
+
+  // Needs onboarding (no org or no user record)
+  if (!orgId || needsOnboarding) {
+    return <Onboarding onComplete={handleOnboardingComplete} />
   }
 
   return (
@@ -591,7 +595,7 @@ export default function App() {
                             </div>
                           )}
                           {selectedBrief.content.componentSpec && selectedBrief.content.componentSpec.length > 0 && (
-      <div>
+                            <div>
                               <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">Components</h3>
                               <div className="grid gap-2 md:grid-cols-2">
                                 {selectedBrief.content.componentSpec.map((comp, i) => (
@@ -613,10 +617,10 @@ export default function App() {
                   {!selectedBrief.content && (
                     <div className="text-center text-muted-foreground py-8">
                       No content available for this brief yet.
-      </div>
+                    </div>
                   )}
-      </div>
-    </>
+                </div>
+              </>
             )}
           </div>
         </SidebarInset>
