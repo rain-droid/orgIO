@@ -196,14 +196,14 @@ export default function App() {
       <div className="dark min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-6">
           <div className="flex items-center justify-center gap-3">
-            <div className="bg-emerald-500 text-black flex aspect-square size-12 items-center justify-center rounded-xl">
+            <div className="bg-primary text-primary-foreground flex aspect-square size-12 items-center justify-center rounded-xl">
               <FileText className="size-6" />
             </div>
             <h1 className="text-3xl font-bold">Drift</h1>
           </div>
           <p className="text-muted-foreground">AI-powered sprint planning</p>
           <SignInButton mode="modal">
-            <Button size="lg" className="bg-emerald-500 hover:bg-emerald-600 text-black">
+            <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground">
               Sign In to Continue
             </Button>
           </SignInButton>
@@ -308,7 +308,7 @@ export default function App() {
                     <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Briefs</div>
                   </div>
                   <div className="rounded-xl border bg-card p-4">
-                    <div className="text-2xl font-bold text-emerald-400">{stats.active}</div>
+                    <div className="text-2xl font-bold text-chart-1">{stats.active}</div>
                     <div className="text-xs text-muted-foreground uppercase tracking-wide">Active</div>
                   </div>
                   <div className="rounded-xl border bg-card p-4">
@@ -334,7 +334,7 @@ export default function App() {
                     <Button 
                       onClick={handleCreateBrief} 
                       disabled={!newBriefName.trim() || loading}
-                      className="bg-emerald-500 hover:bg-emerald-600 text-black"
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground"
                     >
                       <Plus className="size-4 mr-2" />
                       Create Brief
@@ -354,7 +354,7 @@ export default function App() {
                         onClick={() => handleBriefSelect(brief)}
                         className="p-4 flex items-center gap-4 hover:bg-accent/50 cursor-pointer transition-colors"
                       >
-                        <div className={`size-2 rounded-full ${brief.status === 'active' ? 'bg-emerald-400' : 'bg-yellow-400'}`} />
+                        <div className={`size-2 rounded-full ${brief.status === 'active' ? 'bg-chart-1' : 'bg-yellow-400'}`} />
                         <div className="flex-1 min-w-0">
                           <div className="font-medium truncate">{brief.name}</div>
                           <div className="text-xs text-muted-foreground">
@@ -363,7 +363,7 @@ export default function App() {
                         </div>
                         <span className={`text-xs px-2 py-1 rounded ${
                           brief.status === 'active' 
-                            ? 'bg-emerald-500/20 text-emerald-400' 
+                            ? 'bg-chart-1/20 text-chart-1' 
                             : 'bg-yellow-500/20 text-yellow-400'
                         }`}>
                           {brief.status}
@@ -403,7 +403,7 @@ export default function App() {
                       </div>
                       <span className={`text-xs px-2 py-1 rounded ${
                         brief.status === 'active' 
-                          ? 'bg-emerald-500/20 text-emerald-400' 
+                          ? 'bg-chart-1/20 text-chart-1' 
                           : 'bg-yellow-500/20 text-yellow-400'
                       }`}>
                         {brief.status}
@@ -438,7 +438,7 @@ export default function App() {
                         </div>
                         <span className={`text-xs px-2 py-1 rounded flex items-center gap-1 ${
                           sub.status === 'approved' 
-                            ? 'bg-emerald-500/20 text-emerald-400' 
+                            ? 'bg-chart-1/20 text-chart-1' 
                             : sub.status === 'rejected'
                             ? 'bg-red-500/20 text-red-400'
                             : 'bg-yellow-500/20 text-yellow-400'
@@ -460,7 +460,7 @@ export default function App() {
                           <Button
                             size="sm"
                             onClick={() => handleReview(sub.id, 'approved')}
-                            className="bg-emerald-500 hover:bg-emerald-600 text-black"
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground"
                           >
                             Approve
                           </Button>
@@ -496,7 +496,7 @@ export default function App() {
                     <Button 
                       onClick={() => handleSubmit(selectedBrief.id)}
                       disabled={loading}
-                      className="bg-emerald-500 hover:bg-emerald-600 text-black"
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground"
                     >
                       Submit Work
                     </Button>
@@ -508,7 +508,7 @@ export default function App() {
                     <h1 className="text-2xl font-bold">{selectedBrief.name}</h1>
                     <span className={`text-xs px-3 py-1 rounded ${
                       selectedBrief.status === 'active' 
-                        ? 'bg-emerald-500/20 text-emerald-400' 
+                        ? 'bg-chart-1/20 text-chart-1' 
                         : 'bg-yellow-500/20 text-yellow-400'
                     }`}>
                       {selectedBrief.status}

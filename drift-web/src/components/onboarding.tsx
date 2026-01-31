@@ -88,9 +88,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             <div key={s} className="flex items-center">
               <div className={`size-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
                 step === s 
-                  ? 'bg-emerald-500 text-black' 
+                  ? 'bg-primary text-primary-foreground' 
                   : ['welcome', 'organization', 'role'].indexOf(step) > i
-                  ? 'bg-emerald-500/20 text-emerald-400'
+                  ? 'bg-primary/20 text-primary'
                   : 'bg-muted text-muted-foreground'
               }`}>
                 {['welcome', 'organization', 'role'].indexOf(step) > i ? <Check className="size-4" /> : i + 1}
@@ -106,7 +106,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         {step === 'welcome' && (
           <div className="text-center space-y-6 animate-in fade-in duration-300">
             <div className="flex items-center justify-center gap-3">
-              <div className="bg-emerald-500 text-black flex aspect-square size-16 items-center justify-center rounded-2xl">
+              <div className="bg-primary text-primary-foreground flex aspect-square size-16 items-center justify-center rounded-2xl">
                 <FileText className="size-8" />
               </div>
             </div>
@@ -146,7 +146,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             <Button 
               size="lg" 
               onClick={() => setStep('organization')}
-              className="bg-emerald-500 hover:bg-emerald-600 text-black w-full"
+              className="bg-primary hover:bg-primary/90 text-black w-full"
             >
               Get Started
               <ArrowRight className="size-4 ml-2" />
@@ -158,8 +158,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         {step === 'organization' && (
           <div className="space-y-6 animate-in fade-in duration-300">
             <div className="text-center">
-              <div className="size-12 rounded-xl bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
-                <Users className="size-6 text-emerald-400" />
+              <div className="size-12 rounded-xl bg-primary/20 flex items-center justify-center mx-auto mb-4">
+                <Users className="size-6 text-primary" />
               </div>
               <h1 className="text-2xl font-bold mb-2">Set up your workspace</h1>
               <p className="text-muted-foreground">Create a new organization or join an existing one</p>
@@ -179,7 +179,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 <Button 
                   onClick={handleCreateOrg}
                   disabled={!orgName.trim() || loading}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-black"
+                  className="bg-primary hover:bg-primary/90 text-black"
                 >
                   {loading ? <Loader2 className="size-4 animate-spin" /> : 'Create'}
                 </Button>
