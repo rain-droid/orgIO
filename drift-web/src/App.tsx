@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useUser, useAuth, SignInButton, UserButton } from '@clerk/clerk-react'
+import { useUser, useAuth, SignInButton, UserButton, OrganizationSwitcher } from '@clerk/clerk-react'
 import { AppSidebar } from '@/components/app-sidebar'
 import {
   Breadcrumb,
@@ -199,9 +199,27 @@ export default function App() {
     return (
       <div className="dark min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-6">
-          <h1 className="text-2xl font-bold">Select an Organization</h1>
-          <p className="text-muted-foreground">Please select or create an organization to continue</p>
-          <UserButton afterSignOutUrl="/" />
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <div className="bg-emerald-500 text-black flex aspect-square size-12 items-center justify-center rounded-xl">
+              <FileText className="size-6" />
+            </div>
+            <h1 className="text-3xl font-bold">Drift</h1>
+          </div>
+          <h2 className="text-xl font-semibold">Select or Create an Organization</h2>
+          <p className="text-muted-foreground">You need an organization to use Drift</p>
+          <div className="flex justify-center">
+            <OrganizationSwitcher 
+              appearance={{
+                elements: {
+                  rootBox: "flex justify-center",
+                  organizationSwitcherTrigger: "px-4 py-2 rounded-lg border border-border bg-card hover:bg-accent transition-colors"
+                }
+              }}
+              createOrganizationMode="modal"
+              afterCreateOrganizationUrl="/"
+              afterSelectOrganizationUrl="/"
+            />
+          </div>
         </div>
       </div>
     )
