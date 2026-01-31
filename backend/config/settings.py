@@ -15,14 +15,6 @@ class Settings(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str
     
-    # Optional: Other LLM Providers
-    GOOGLE_API_KEY: Optional[str] = None
-    ANTHROPIC_API_KEY: Optional[str] = None
-    
-    # Optional: Pinecone (for task embeddings cache)
-    PINECONE_API_KEY: Optional[str] = None
-    PINECONE_ENVIRONMENT: Optional[str] = None
-    
     # Agent Configuration
     AGENT_MODEL: str = "gpt-4o"
     AGENT_TEMPERATURE: float = 0.7

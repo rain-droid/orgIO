@@ -20,13 +20,6 @@ langchain-community==0.0.16
 
 # LangChain LLMs
 langchain-openai==0.0.5
-langchain-google-genai==0.0.6
-langchain-anthropic==0.0.1
-
-# Vector Store & Embeddings
-langchain-pinecone==0.0.1
-pinecone-client==3.0.0
-faiss-cpu==1.7.4
 
 # Tools & Agents
 openai==1.10.0
