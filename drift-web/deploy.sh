@@ -16,8 +16,16 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
-# Load env vars
-export $(cat .env | xargs)
+# Load env vars properly (handles special chars)
+set -a
+source .env
+set +a
+
+# Debug: show loaded vars
+echo "📋 Loaded env vars:"
+echo "   CLERK: ${VITE_CLERK_PUBLISHABLE_KEY:0:20}..."
+echo "   SUPABASE URL: ${VITE_SUPABASE_URL}"
+echo "   SUPABASE KEY: ${VITE_SUPABASE_ANON_KEY:0:20}..."
 
 # Build and start
 echo "📦 Building Docker image..."
