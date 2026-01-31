@@ -30,8 +30,6 @@ import {
   Code,
   Palette,
   LayoutGrid,
-  FileText,
-  X
 } from 'lucide-react'
 
 type View = 'home' | 'brief' | 'reviews'
@@ -168,7 +166,7 @@ export default function App() {
     setSubmissions(submissions.map(s => s.id === subId ? { ...s, status } : s))
   }
 
-  const generateRoleContent = (role: Role, name: string) => {
+  const generateRoleContent = (role: Role, _name: string) => {
     if (role === 'pm') return 'pm'
     if (role === 'dev') return 'dev'
     return 'designer'
