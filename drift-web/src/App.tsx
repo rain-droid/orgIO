@@ -264,107 +264,156 @@ export default function App() {
         <main className="flex-1 overflow-auto">
           {/* HOME VIEW */}
           {currentView === 'home' && (
-            <div className="h-full flex flex-col animate-fadeIn">
-              {/* Hero Section */}
-              <div className="flex-1 flex flex-col items-center justify-center max-w-3xl mx-auto w-full px-6">
-                {/* Main Headline */}
-                <div className="text-center mb-10">
-                  <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4 bg-gradient-to-r from-foreground via-foreground to-muted-foreground bg-clip-text">
-                    Ship faster with AI-powered briefs
-                  </h1>
-                  <p className="text-lg text-muted-foreground max-w-xl mx-auto">
-                    Describe what you're building. Drift generates specs tailored for{' '}
-                    <span className={roleColor}>{currentRole === 'pm' ? 'product managers' : currentRole === 'dev' ? 'developers' : 'designers'}</span>.
-                  </p>
-                </div>
-
-                {/* Input Card */}
-                <div className="w-full max-w-2xl">
-                  <div className="relative bg-card border border-border rounded-xl shadow-lg p-1 input-glow transition-all">
-                    <textarea
-                      placeholder="Describe your feature... e.g., 'Add Apple Pay integration to checkout'"
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleCreateBrief())}
-                      className="w-full h-28 p-4 bg-transparent text-base resize-none placeholder:text-muted-foreground/40 focus:outline-none"
-                    />
-                    <div className="flex items-center justify-between px-3 pb-3">
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Sparkles className="size-3.5" />
-                        <span>AI generates {currentRole === 'pm' ? 'user stories & sprints' : currentRole === 'dev' ? 'architecture & API specs' : 'flows & components'}</span>
-                      </div>
-                      <Button
-                        onClick={handleCreateBrief}
-                        disabled={!inputValue.trim() || loading}
-                        className="h-10 px-5 text-sm font-medium"
-                      >
-                        {loading ? <Loader2 className="size-4 animate-spin" /> : <>Create Brief <ArrowRight className="ml-2 size-4" /></>}
-                      </Button>
-                    </div>
+            <div className="p-6 space-y-6 animate-fadeIn">
+              {/* Input Section - Top */}
+              <div className="relative bg-card border border-border rounded-lg p-4 input-glow transition-all">
+                <input
+                  type="text"
+                  placeholder="Plan a new brief for Drift to handle..."
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreateBrief()}
+                  className="w-full bg-transparent text-base placeholder:text-muted-foreground/50 focus:outline-none"
+                />
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/50">
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                    <span>Role</span>
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${roleBg} ${roleColor}`}>
+                      {currentRole.toUpperCase()}
+                    </span>
                   </div>
-                </div>
-
-                {/* Stats Cards */}
-                <div className="flex flex-wrap items-center justify-center gap-4 mt-10">
-                  <div className="flex items-center gap-3 px-5 py-4 bg-card border border-border rounded-xl card-lift">
-                    <div className="size-3 rounded-full bg-emerald-500 animate-pulse" />
-                    <div>
-                      <div className="text-2xl font-bold">{briefs.filter(b => b.status === 'active').length}</div>
-                      <div className="text-xs text-muted-foreground font-medium">Active Briefs</div>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setCurrentView('reviews')} 
-                    className="flex items-center gap-3 px-5 py-4 bg-card border border-border rounded-xl card-lift hover:border-yellow-500/50 hover:bg-yellow-500/5"
+                  <Button
+                    onClick={handleCreateBrief}
+                    disabled={!inputValue.trim() || loading}
+                    size="sm"
+                    className="h-8"
                   >
-                    <div className="size-3 rounded-full bg-yellow-500" />
-                    <div className="text-left">
-                      <div className="text-2xl font-bold">{submissions.filter(s => s.status === 'pending').length}</div>
-                      <div className="text-xs text-muted-foreground font-medium">Pending Reviews</div>
+                    {loading ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Two Column Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Active Briefs Column */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-semibold">Active Briefs</h2>
+                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                        {briefs.filter(b => b.status === 'active').length}
+                      </span>
                     </div>
-                  </button>
-                  <div className="flex items-center gap-3 px-5 py-4 bg-card border border-border rounded-xl card-lift">
-                    <div className="size-3 rounded-full bg-primary" />
-                    <div>
-                      <div className="text-2xl font-bold">{submissions.filter(s => s.status === 'approved').length}</div>
-                      <div className="text-xs text-muted-foreground font-medium">Approved</div>
+                    <button className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                      All <ArrowRight className="size-3" />
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {briefs.filter(b => b.status === 'active').slice(0, 5).map(brief => (
+                      <div
+                        key={brief.id}
+                        className="group flex items-center gap-3 p-3 bg-card border border-border rounded-lg hover:border-primary/50 cursor-pointer transition-all"
+                        onClick={() => handleBriefSelect(brief)}
+                      >
+                        <div className="size-2 rounded-full bg-emerald-500 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{brief.name}</div>
+                          <div className="text-xs text-muted-foreground">Just now</div>
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm(brief.id); }}
+                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-all"
+                        >
+                          <MoreHorizontal className="size-4 text-muted-foreground" />
+                        </button>
+                      </div>
+                    ))}
+                    {briefs.filter(b => b.status === 'active').length === 0 && (
+                      <div className="p-8 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">
+                        No active briefs yet
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Pending Reviews Column */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-semibold">Pending Reviews</h2>
+                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                        {submissions.filter(s => s.status === 'pending').length}
+                      </span>
                     </div>
+                    <button 
+                      onClick={() => setCurrentView('reviews')}
+                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                    >
+                      All <ArrowRight className="size-3" />
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {submissions.filter(s => s.status === 'pending').slice(0, 5).map(sub => (
+                      <div
+                        key={sub.id}
+                        className="group flex items-center gap-3 p-3 bg-card border border-border rounded-lg hover:border-yellow-500/50 cursor-pointer transition-all"
+                        onClick={() => setCurrentView('reviews')}
+                      >
+                        <div className="size-2 rounded-full bg-yellow-500 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{sub.userName}</div>
+                          <div className="text-xs text-muted-foreground">{sub.role.toUpperCase()} • {sub.durationMinutes}m</div>
+                        </div>
+                        <span className="text-xs text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded">
+                          Pending
+                        </span>
+                      </div>
+                    ))}
+                    {submissions.filter(s => s.status === 'pending').length === 0 && (
+                      <div className="p-8 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">
+                        No pending reviews
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Recent Briefs - Bottom Section */}
-              {briefs.length > 0 && (
-                <div className="border-t border-border bg-muted/30 px-6 py-6">
-                  <div className="max-w-3xl mx-auto">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-sm font-semibold text-foreground">Recent Briefs</h2>
-                      <span className="text-xs text-muted-foreground">{briefs.length} total</span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {briefs.slice(0, 6).map(brief => (
-                        <div
-                          key={brief.id}
-                          className="group relative flex items-center gap-3 p-4 bg-card border border-border rounded-xl card-lift hover:border-primary/50 cursor-pointer"
-                          onClick={() => handleBriefSelect(brief)}
-                        >
-                          <div className={`size-2.5 rounded-full shrink-0 ${brief.status === 'active' ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`} />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium truncate">{brief.name}</div>
-                            <div className="text-xs text-muted-foreground capitalize">{brief.status}</div>
-                          </div>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setDeleteConfirm(brief.id); }}
-                            className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-destructive/10 rounded-md transition-all"
-                          >
-                            <Trash2 className="size-3.5 text-destructive" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+              {/* Completed Section */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <h2 className="font-semibold">Completed</h2>
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                      {submissions.filter(s => s.status === 'approved').length}
+                    </span>
                   </div>
+                  <button 
+                    onClick={() => setCurrentView('reviews')}
+                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  >
+                    All <ArrowRight className="size-3" />
+                  </button>
                 </div>
-              )}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {submissions.filter(s => s.status === 'approved').slice(0, 6).map(sub => (
+                    <div
+                      key={sub.id}
+                      className="flex items-center gap-3 p-3 bg-card border border-border rounded-lg"
+                    >
+                      <CheckCircle className="size-4 text-emerald-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{sub.userName}</div>
+                        <div className="text-xs text-muted-foreground">{sub.role.toUpperCase()}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {submissions.filter(s => s.status === 'approved').length === 0 && (
+                    <div className="col-span-full p-6 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">
+                      No completed submissions yet
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
