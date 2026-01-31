@@ -30,6 +30,9 @@ import {
   Code,
   Palette,
   LayoutGrid,
+  Play,
+  Square,
+  Radio,
 } from 'lucide-react'
 
 type View = 'home' | 'brief' | 'reviews'
@@ -50,8 +53,41 @@ export default function App() {
   const [checkingUser, setCheckingUser] = useState(true)
   const [generatedContent, setGeneratedContent] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [isRecording, setIsRecording] = useState(false)
+  const [sessionTime, setSessionTime] = useState(0)
 
   const currentRole: Role = driftUser?.role || 'dev'
+
+  // Session timer
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | undefined
+    if (isRecording) {
+      interval = setInterval(() => {
+        setSessionTime(t => t + 1)
+      }, 1000)
+    }
+    return () => { if (interval) clearInterval(interval) }
+  }, [isRecording])
+
+  const formatTime = (seconds: number) => {
+    const hrs = Math.floor(seconds / 3600)
+    const mins = Math.floor((seconds % 3600) / 60)
+    const secs = seconds % 60
+    if (hrs > 0) return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const handleStartSession = () => {
+    setIsRecording(true)
+    setSessionTime(0)
+    // TODO: Trigger desktop app via deep link or WebSocket
+    // window.open('drift-desktop://start-session?briefId=' + selectedBrief?.id)
+  }
+
+  const handleStopSession = () => {
+    setIsRecording(false)
+    // TODO: Show session summary modal
+  }
 
   useEffect(() => {
     if (!isSignedIn || !clerkUser || !orgId) {
@@ -417,194 +453,250 @@ export default function App() {
             </div>
           )}
 
-          {/* BRIEF VIEW */}
+          {/* BRIEF VIEW - Chat Style */}
           {currentView === 'brief' && selectedBrief && (
-            <div className="p-8 animate-fadeIn">
-              <div className="max-w-4xl mx-auto space-y-8">
-                {/* Brief Header */}
-                <div className="flex items-start justify-between">
-                  <div>
+            <div className="h-full flex flex-col">
+              {/* Brief Header */}
+              <div className="flex-shrink-0 px-6 py-4 border-b border-border bg-card/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
                     <button 
-                      onClick={() => { setCurrentView('home'); setSelectedBrief(null); }}
-                      className="text-sm text-muted-foreground hover:text-foreground mb-2 transition-colors"
+                      onClick={() => { setCurrentView('home'); setSelectedBrief(null); setIsRecording(false); }}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      ← Back
+                      <ArrowRight className="size-4 rotate-180" />
                     </button>
-                    <h1 className="text-2xl font-semibold">{selectedBrief.name}</h1>
+                    <div>
+                      <h1 className="text-lg font-semibold">{selectedBrief.name}</h1>
+                      <p className="text-xs text-muted-foreground">Brief • {selectedBrief.status}</p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {currentRole !== 'pm' && (
-                      <Button onClick={handleSubmitWork} disabled={loading}>
-                        <Send className="size-4 mr-2" /> Submit Work
+                  <div className="flex items-center gap-3">
+                    {/* Session Recording Controls */}
+                    {isRecording ? (
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded-full">
+                          <Radio className="size-3 text-red-500 animate-pulse" />
+                          <span className="text-sm font-mono text-red-500">{formatTime(sessionTime)}</span>
+                        </div>
+                        <Button 
+                          onClick={handleStopSession} 
+                          variant="destructive" 
+                          size="sm"
+                          className="gap-1.5"
+                        >
+                          <Square className="size-3" /> Stop Session
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button 
+                        onClick={handleStartSession} 
+                        variant="outline" 
+                        size="sm"
+                        className="gap-1.5 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600"
+                      >
+                        <Play className="size-3" /> Start Session
                       </Button>
                     )}
-                    <Button variant="ghost" size="icon" onClick={() => setDeleteConfirm(selectedBrief.id)}>
+                    
+                    {currentRole !== 'pm' && !isRecording && (
+                      <Button onClick={handleSubmitWork} disabled={loading} size="sm">
+                        <Send className="size-3.5 mr-1.5" /> Submit Work
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="icon" className="size-8" onClick={() => setDeleteConfirm(selectedBrief.id)}>
                       <MoreHorizontal className="size-4" />
                     </Button>
                   </div>
                 </div>
+              </div>
 
-                {/* Generated Content */}
-                {generating ? (
-                  <div className="flex items-center gap-3 p-6 bg-card border border-border rounded-lg">
-                    <div className={`size-10 rounded-lg ${roleBg} flex items-center justify-center`}>
-                      <Sparkles className={`size-5 ${roleColor} animate-pulse`} />
+              {/* Chat Messages Area - Scrollable */}
+              <div className="flex-1 overflow-auto p-6">
+                <div className="max-w-3xl mx-auto space-y-6">
+                  {/* User Message - The Brief */}
+                  <div className="flex gap-3">
+                    <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <span className="text-xs font-medium text-primary">You</span>
                     </div>
-                    <div>
-                      <p className="font-medium">Generating your {currentRole === 'pm' ? 'sprint plan' : currentRole === 'dev' ? 'technical spec' : 'design spec'}...</p>
-                      <p className="text-sm text-muted-foreground">AI is analyzing your brief</p>
+                    <div className="flex-1">
+                      <p className="text-sm text-muted-foreground mb-1">Created brief</p>
+                      <div className="p-4 bg-card border border-border rounded-lg">
+                        <p className="font-medium">{selectedBrief.name}</p>
+                      </div>
                     </div>
                   </div>
-                ) : generatedContent && (
-                  <div className="space-y-6">
-                    {/* PM View */}
-                    {currentRole === 'pm' && (
-                      <>
-                        {/* Kanban */}
-                        <div className="bg-card border border-border rounded-lg p-6">
-                          <h3 className="text-sm font-medium text-muted-foreground mb-4">📊 SPRINT BOARD</h3>
-                          <div className="grid grid-cols-3 gap-4">
-                            {['To Do', 'In Progress', 'Done'].map(col => (
-                              <div key={col} className="space-y-3">
-                                <div className="text-xs font-medium text-muted-foreground">{col}</div>
-                                {col === 'To Do' && (
-                                  <>
-                                    <div className="p-3 bg-background border border-border rounded">Setup payment intent</div>
-                                    <div className="p-3 bg-background border border-border rounded">Handle webhook</div>
-                                  </>
-                                )}
-                                {col === 'In Progress' && (
-                                  <div className="p-3 bg-background border border-border rounded">UI integration</div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
 
-                        {/* User Stories */}
-                        <div className="bg-card border border-border rounded-lg p-6">
-                          <h3 className="text-sm font-medium text-muted-foreground mb-4">📝 USER STORIES</h3>
-                          <div className="space-y-3">
-                            <div className="p-4 bg-background border border-border rounded">
-                              <p className="font-medium mb-2">As a customer, I want to pay quickly so I can complete checkout faster.</p>
-                              <div className="text-sm text-muted-foreground space-y-1">
-                                <p>✓ Payment button visible when supported</p>
-                                <p>✓ Fallback for unsupported devices</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                  {/* AI Response - Generated Content */}
+                  <div className="flex gap-3">
+                    <div className={`size-8 rounded-full ${roleBg} flex items-center justify-center shrink-0`}>
+                      <Sparkles className={`size-4 ${roleColor}`} />
+                    </div>
+                    <div className="flex-1 space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Generated {currentRole === 'pm' ? 'sprint plan' : currentRole === 'dev' ? 'technical spec' : 'design spec'} for {currentRole.toUpperCase()}
+                      </p>
 
-                        {/* Timeline */}
-                        <div className="bg-card border border-border rounded-lg p-6">
-                          <h3 className="text-sm font-medium text-muted-foreground mb-4">⏱️ TIMELINE</h3>
-                          <div className="flex items-center gap-2">
-                            {['Backend', 'Frontend', 'Testing', 'Launch'].map((phase, i) => (
-                              <div key={phase} className="flex items-center">
-                                <div className={`px-4 py-2 rounded ${i < 2 ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                                  {phase}
+                      {generating ? (
+                        <div className="flex items-center gap-2 p-4 bg-card border border-border rounded-lg">
+                          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">Generating...</span>
+                        </div>
+                      ) : generatedContent && (
+                        <>
+                          {/* PM View */}
+                          {currentRole === 'pm' && (
+                            <>
+                              <div className="p-4 bg-card border border-border rounded-lg">
+                                <h3 className="text-sm font-medium mb-3 flex items-center gap-2">📊 Sprint Board</h3>
+                                <div className="grid grid-cols-3 gap-3">
+                                  {['To Do', 'In Progress', 'Done'].map(col => (
+                                    <div key={col} className="space-y-2">
+                                      <div className="text-xs font-medium text-muted-foreground">{col}</div>
+                                      {col === 'To Do' && (
+                                        <>
+                                          <div className="p-2 text-sm bg-background border border-border rounded">Setup payment intent</div>
+                                          <div className="p-2 text-sm bg-background border border-border rounded">Handle webhook</div>
+                                        </>
+                                      )}
+                                      {col === 'In Progress' && (
+                                        <div className="p-2 text-sm bg-background border border-border rounded">UI integration</div>
+                                      )}
+                                    </div>
+                                  ))}
                                 </div>
-                                {i < 3 && <div className="w-4 h-px bg-border" />}
                               </div>
-                            ))}
-                          </div>
-                        </div>
-                      </>
-                    )}
 
-                    {/* Dev View */}
-                    {currentRole === 'dev' && (
-                      <>
-                        {/* Architecture */}
-                        <div className="bg-card border border-border rounded-lg p-6">
-                          <h3 className="text-sm font-medium text-muted-foreground mb-4">🔧 ARCHITECTURE</h3>
-                          <div className="flex items-center justify-center gap-4 py-8">
-                            <div className="px-6 py-3 bg-background border border-border rounded">Client</div>
-                            <div className="text-muted-foreground">→</div>
-                            <div className="px-6 py-3 bg-background border border-border rounded">API</div>
-                            <div className="text-muted-foreground">→</div>
-                            <div className="px-6 py-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded">Stripe</div>
-                          </div>
-                        </div>
+                              <div className="p-4 bg-card border border-border rounded-lg">
+                                <h3 className="text-sm font-medium mb-3 flex items-center gap-2">📝 User Stories</h3>
+                                <div className="p-3 bg-background border border-border rounded">
+                                  <p className="text-sm font-medium mb-2">As a customer, I want to pay quickly so I can complete checkout faster.</p>
+                                  <div className="text-xs text-muted-foreground space-y-1">
+                                    <p>✓ Payment button visible when supported</p>
+                                    <p>✓ Fallback for unsupported devices</p>
+                                  </div>
+                                </div>
+                              </div>
 
-                        {/* API Endpoints */}
-                        <div className="bg-card border border-border rounded-lg p-6">
-                          <h3 className="text-sm font-medium text-muted-foreground mb-4">📦 API ENDPOINTS</h3>
-                          <div className="font-mono text-sm space-y-4">
-                            <div className="p-4 bg-background border border-border rounded">
-                              <p className="text-emerald-400">POST /api/payments/create-intent</p>
-                              <p className="text-muted-foreground mt-2">Request: {'{ amount, currency }'}</p>
-                              <p className="text-muted-foreground">Response: {'{ clientSecret, paymentIntentId }'}</p>
-                            </div>
-                          </div>
-                        </div>
+                              <div className="p-4 bg-card border border-border rounded-lg">
+                                <h3 className="text-sm font-medium mb-3 flex items-center gap-2">⏱️ Timeline</h3>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {['Backend', 'Frontend', 'Testing', 'Launch'].map((phase, i) => (
+                                    <div key={phase} className="flex items-center">
+                                      <div className={`px-3 py-1.5 text-sm rounded ${i < 2 ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                                        {phase}
+                                      </div>
+                                      {i < 3 && <div className="w-3 h-px bg-border mx-1" />}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </>
+                          )}
 
-                        {/* Code */}
-                        <div className="bg-card border border-border rounded-lg p-6">
-                          <h3 className="text-sm font-medium text-muted-foreground mb-4">💻 CODE</h3>
-                          <pre className="p-4 bg-background border border-border rounded font-mono text-sm overflow-x-auto">
+                          {/* Dev View */}
+                          {currentRole === 'dev' && (
+                            <>
+                              <div className="p-4 bg-card border border-border rounded-lg">
+                                <h3 className="text-sm font-medium mb-3 flex items-center gap-2">🔧 Architecture</h3>
+                                <div className="flex items-center justify-center gap-3 py-4">
+                                  <div className="px-4 py-2 text-sm bg-background border border-border rounded">Client</div>
+                                  <span className="text-muted-foreground">→</span>
+                                  <div className="px-4 py-2 text-sm bg-background border border-border rounded">API</div>
+                                  <span className="text-muted-foreground">→</span>
+                                  <div className="px-4 py-2 text-sm bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded">Stripe</div>
+                                </div>
+                              </div>
+
+                              <div className="p-4 bg-card border border-border rounded-lg">
+                                <h3 className="text-sm font-medium mb-3 flex items-center gap-2">📦 API Endpoints</h3>
+                                <div className="p-3 bg-background border border-border rounded font-mono text-sm">
+                                  <p className="text-emerald-400">POST /api/payments/create-intent</p>
+                                  <p className="text-muted-foreground mt-1">Request: {'{ amount, currency }'}</p>
+                                  <p className="text-muted-foreground">Response: {'{ clientSecret, paymentIntentId }'}</p>
+                                </div>
+                              </div>
+
+                              <div className="p-4 bg-card border border-border rounded-lg">
+                                <h3 className="text-sm font-medium mb-3 flex items-center gap-2">💻 Code</h3>
+                                <pre className="p-3 bg-background border border-border rounded font-mono text-sm overflow-x-auto">
 {`const payment = await stripe.paymentIntents.create({
   amount: total * 100,
   currency: 'usd',
   payment_method_types: ['card'],
 });`}
-                          </pre>
-                        </div>
-                      </>
-                    )}
+                                </pre>
+                              </div>
+                            </>
+                          )}
 
-                    {/* Designer View */}
-                    {currentRole === 'designer' && (
-                      <>
-                        {/* User Flow */}
-                        <div className="bg-card border border-border rounded-lg p-6">
-                          <h3 className="text-sm font-medium text-muted-foreground mb-4">📱 USER FLOW</h3>
-                          <div className="flex items-center justify-center gap-2 py-6">
-                            {['Cart', 'Checkout', 'Payment', 'Success'].map((step, i) => (
-                              <div key={step} className="flex items-center">
-                                <div className="flex flex-col items-center">
-                                  <div className={`size-10 rounded-full flex items-center justify-center ${i < 3 ? 'bg-violet-500/20 text-violet-400' : 'bg-muted text-muted-foreground'}`}>
-                                    {i + 1}
-                                  </div>
-                                  <span className="text-xs mt-2">{step}</span>
+                          {/* Designer View */}
+                          {currentRole === 'designer' && (
+                            <>
+                              <div className="p-4 bg-card border border-border rounded-lg">
+                                <h3 className="text-sm font-medium mb-3 flex items-center gap-2">📱 User Flow</h3>
+                                <div className="flex items-center justify-center gap-2 py-4">
+                                  {['Cart', 'Checkout', 'Payment', 'Success'].map((step, i) => (
+                                    <div key={step} className="flex items-center">
+                                      <div className="flex flex-col items-center">
+                                        <div className={`size-8 rounded-full flex items-center justify-center text-sm ${i < 3 ? 'bg-violet-500/20 text-violet-400' : 'bg-muted text-muted-foreground'}`}>
+                                          {i + 1}
+                                        </div>
+                                        <span className="text-xs mt-1">{step}</span>
+                                      </div>
+                                      {i < 3 && <div className="w-6 h-px bg-border mx-1" />}
+                                    </div>
+                                  ))}
                                 </div>
-                                {i < 3 && <div className="w-8 h-px bg-border mx-2" />}
                               </div>
-                            ))}
-                          </div>
-                        </div>
 
-                        {/* Component Spec */}
-                        <div className="bg-card border border-border rounded-lg p-6">
-                          <h3 className="text-sm font-medium text-muted-foreground mb-4">🎨 COMPONENT SPEC</h3>
-                          <div className="flex items-center justify-center py-6">
-                            <div className="space-y-4 text-center">
-                              <button className="px-8 py-3 bg-foreground text-background rounded-lg font-medium">
-                                Pay with Apple Pay
-                              </button>
-                              <div className="text-xs text-muted-foreground">
-                                Height: 48px | Radius: 8px | Background: #000
+                              <div className="p-4 bg-card border border-border rounded-lg">
+                                <h3 className="text-sm font-medium mb-3 flex items-center gap-2">🎨 Component Spec</h3>
+                                <div className="flex flex-col items-center py-4 gap-3">
+                                  <button className="px-6 py-2.5 bg-foreground text-background rounded-lg text-sm font-medium">
+                                    Pay with Apple Pay
+                                  </button>
+                                  <p className="text-xs text-muted-foreground">Height: 48px | Radius: 8px | Background: #000</p>
+                                </div>
                               </div>
-                            </div>
-                          </div>
-                        </div>
 
-                        {/* States */}
-                        <div className="bg-card border border-border rounded-lg p-6">
-                          <h3 className="text-sm font-medium text-muted-foreground mb-4">🖼️ STATES</h3>
-                          <div className="flex items-center justify-center gap-6 py-4">
-                            {['Default', 'Hover', 'Loading', 'Disabled'].map((state, i) => (
-                              <div key={state} className="text-center">
-                                <div className={`w-24 h-10 rounded ${i === 3 ? 'bg-muted' : i === 2 ? 'bg-foreground/70' : 'bg-foreground'}`} />
-                                <span className="text-xs text-muted-foreground mt-2 block">{state}</span>
+                              <div className="p-4 bg-card border border-border rounded-lg">
+                                <h3 className="text-sm font-medium mb-3 flex items-center gap-2">🖼️ States</h3>
+                                <div className="flex items-center justify-center gap-4 py-4">
+                                  {['Default', 'Hover', 'Loading', 'Disabled'].map((state, i) => (
+                                    <div key={state} className="text-center">
+                                      <div className={`w-20 h-8 rounded ${i === 3 ? 'bg-muted' : i === 2 ? 'bg-foreground/70' : 'bg-foreground'}`} />
+                                      <span className="text-xs text-muted-foreground mt-1 block">{state}</span>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
-                            ))}
-                          </div>
-                        </div>
-                      </>
-                    )}
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
-                )}
+                </div>
+              </div>
+
+              {/* Chat Input - Fixed at Bottom */}
+              <div className="flex-shrink-0 p-4 border-t border-border bg-card/50">
+                <div className="max-w-3xl mx-auto">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Ask a follow-up question about this brief..."
+                      className="w-full h-11 pl-4 pr-12 bg-background border border-border rounded-lg text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    />
+                    <Button size="icon" className="absolute right-1.5 top-1.5 size-8">
+                      <ArrowRight className="size-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2 text-center">
+                    Ask about implementation details, timelines, or refine the spec
+                  </p>
+                </div>
               </div>
             </div>
           )}
