@@ -1,12 +1,23 @@
 import { useState, lazy, Suspense, useEffect } from 'react'
 import { Mainbar } from './components/mainbar/Mainbar'
 import { useUIState } from './state/UIStateProvider'
-import { useAuth, useUser, SignInButton, SignOutButton } from '@clerk/clerk-react'
+import { shell } from 'electron'
 
 const AI = lazy(() => import('./components/mainbar/AI').then((module) => ({ default: module.AI })))
 
-// Login Screen Component
-function LoginScreen() {
+// Auth URL - opens in browser for login
+const AUTH_URL = 'https://34.185.148.16/auth/desktop'
+
+// Login Screen Component - just a button that opens browser
+function LoginScreen({ onLogin }: { onLogin: () => void }) {
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleLogin = async () => {
+    setIsLoading(true)
+    // Open browser for authentication
+    window.api.send('open-auth-url', AUTH_URL)
+  }
+
   return (
     <div className="w-full h-full flex flex-col items-center justify-center gap-6 bg-gradient-to-br from-gray-900 to-black">
       <div className="glass rounded-2xl p-8 flex flex-col items-center gap-6 max-w-md">
@@ -23,21 +34,29 @@ function LoginScreen() {
           <span className="text-sm">Sign in to start your session</span>
         </p>
 
-        <SignInButton mode="modal">
-          <button className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity">
-            Sign In with Clerk
-          </button>
-        </SignInButton>
+        <button 
+          onClick={handleLogin}
+          disabled={isLoading}
+          className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
+        >
+          {isLoading ? 'Opening Browser...' : 'Sign In with Drift'}
+        </button>
+
+        {isLoading && (
+          <p className="text-xs text-gray-500 text-center">
+            Complete login in your browser.<br/>
+            The app will update automatically.
+          </p>
+        )}
       </div>
     </div>
   )
 }
 
 // Main App Component
-function MainApp() {
+function MainApp({ userEmail, onLogout }: { userEmail: string; onLogout: () => void }) {
   const isChatPaneVisible = useUIState((state) => state.matches('chat') || state.matches('live'))
   const [isWideChatPane, setIsWideChatPane] = useState(false)
-  const { user } = useUser()
 
   const chatPaneWidthClass = isWideChatPane ? 'w-[60vw]' : 'w-[40vw]'
 
@@ -45,12 +64,13 @@ function MainApp() {
     <div className="w-full h-full flex flex-col items-center justify-start gap-1 pt-2">
       {/* User info bar */}
       <div className="absolute top-2 right-4 flex items-center gap-2 z-50">
-        <span className="text-xs text-gray-400">{user?.primaryEmailAddress?.emailAddress}</span>
-        <SignOutButton>
-          <button className="text-xs text-gray-500 hover:text-white transition-colors">
-            Sign Out
-          </button>
-        </SignOutButton>
+        <span className="text-xs text-gray-400">{userEmail}</span>
+        <button 
+          onClick={onLogout}
+          className="text-xs text-gray-500 hover:text-white transition-colors"
+        >
+          Sign Out
+        </button>
       </div>
 
       <Mainbar />
@@ -69,30 +89,50 @@ function MainApp() {
 }
 
 export default function App() {
-  const { isSignedIn, isLoaded, getToken } = useAuth()
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [userEmail, setUserEmail] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Sync auth token with main process
   useEffect(() => {
-    if (isSignedIn) {
-      getToken().then((token) => {
-        if (token) {
-          window.api.invoke('store-auth-token', token)
-        }
-      })
-    }
-  }, [isSignedIn, getToken])
+    // Check if we have a stored token
+    window.api.invoke('get-auth-token').then((token: string | null) => {
+      if (token) {
+        // TODO: Validate token and get user info
+        setIsAuthenticated(true)
+        setUserEmail('user@drift.app') // Placeholder
+      }
+      setIsLoading(false)
+    })
 
-  if (!isLoaded) {
+    // Listen for auth token from callback
+    window.api.receive('auth-token-received', (data: { token: string; email: string }) => {
+      window.api.invoke('store-auth-token', data.token)
+      setUserEmail(data.email)
+      setIsAuthenticated(true)
+    })
+
+    return () => {
+      window.api.removeAllListeners('auth-token-received')
+    }
+  }, [])
+
+  const handleLogout = () => {
+    window.api.invoke('store-auth-token', null)
+    setIsAuthenticated(false)
+    setUserEmail('')
+  }
+
+  if (isLoading) {
     return (
-      <div className="w-full h-full flex items-center justify-center">
+      <div className="w-full h-full flex items-center justify-center bg-gray-900">
         <div className="animate-pulse text-white">Loading...</div>
       </div>
     )
   }
 
-  if (!isSignedIn) {
-    return <LoginScreen />
+  if (!isAuthenticated) {
+    return <LoginScreen onLogin={() => {}} />
   }
 
-  return <MainApp />
+  return <MainApp userEmail={userEmail} onLogout={handleLogout} />
 }

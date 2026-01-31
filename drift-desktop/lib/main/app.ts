@@ -11,26 +11,28 @@ import { performance } from 'node:perf_hooks';
 export function createAppWindow(isInvisible = false, t0: number): BrowserWindow {
 
   const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 900,
+    height: 700,
     minWidth: 400,
     minHeight: 300,
     skipTaskbar: false,
+    center: true,
     webPreferences: {
       preload: join(__dirname, '../preload/preload.js'),
-      sandbox: false
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false
     },
     show: false,
-    alwaysOnTop: true,
-    frame: false,
-    transparent: true,
-    hasShadow: false,
+    alwaysOnTop: false,
+    frame: true,
+    transparent: false,
+    hasShadow: true,
     focusable: true,
     icon: appIcon,
-    titleBarStyle: 'hiddenInset',
     title: 'Drift',
     resizable: true,
-    backgroundColor: '#00000000',
+    backgroundColor: '#1c1c1c',
   })
   
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
@@ -42,6 +44,8 @@ export function createAppWindow(isInvisible = false, t0: number): BrowserWindow 
     console.log('[perf] ready-to-show', (performance.now() - t0).toFixed(1), 'ms');
     mainWindow.show()
     mainWindow.focus()
+    // Open DevTools to see errors
+    mainWindow.webContents.openDevTools()
   })
 
   const lastTime = { value: t0 };
