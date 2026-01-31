@@ -14,7 +14,7 @@ type Step = 'welcome' | 'organization' | 'role'
 
 export function Onboarding({ onComplete }: OnboardingProps) {
   const { user } = useUser()
-  const { orgId, getToken } = useAuth()
+  const { getToken } = useAuth()
   const { createOrganization, setActive, userMemberships } = useOrganizationList({
     userMemberships: { infinite: true }
   })
