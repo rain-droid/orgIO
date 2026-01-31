@@ -35,5 +35,14 @@ echo "🔄 Restarting containers..."
 docker compose down
 docker compose up -d
 
+IP=$(curl -s ifconfig.me)
 echo "✅ Drift Web is live!"
-echo "   http://$(curl -s ifconfig.me)"
+
+if [ -f ssl/cert.pem ]; then
+    echo "   🔒 https://$IP"
+    echo "   🔒 https://$(echo $IP | tr '.' '-').nip.io"
+else
+    echo "   http://$IP"
+    echo ""
+    echo "💡 To enable HTTPS, run: chmod +x setup-ssl.sh && ./setup-ssl.sh"
+fi
