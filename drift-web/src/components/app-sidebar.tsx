@@ -62,7 +62,7 @@ export function AppSidebar({
       isActive: currentView === 'briefs',
       onClick: () => onViewChange?.('briefs'),
       items: briefs.slice(0, 5).map(brief => ({
-        title: brief.title,
+        title: brief.name,
         url: "#",
         onClick: () => onBriefSelect?.(brief),
       })),
@@ -96,7 +96,7 @@ export function AppSidebar({
   ]
 
   const projects = briefs.filter(b => b.status === 'active').slice(0, 3).map(brief => ({
-    name: brief.title,
+    name: brief.name,
     url: "#",
     icon: Zap,
     onClick: () => onBriefSelect?.(brief),

@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/sidebar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { Brief, Submission, User } from './types'
+import type { Brief, Submission, User, Role } from './types'
 import {
   fetchBriefs,
   createBrief,
@@ -31,7 +31,6 @@ import {
 import { Plus, FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react'
 
 type View = 'dashboard' | 'briefs' | 'reviews' | 'brief-detail'
-type Role = 'pm' | 'dev' | 'designer'
 
 export default function App() {
   const { isSignedIn, user: clerkUser } = useUser()
@@ -42,11 +41,11 @@ export default function App() {
   const [driftUser, setDriftUser] = useState<User | null>(null)
   const [currentView, setCurrentView] = useState<View>('dashboard')
   const [selectedBrief, setSelectedBrief] = useState<Brief | null>(null)
-  const [newBriefTitle, setNewBriefTitle] = useState('')
+  const [newBriefName, setNewBriefName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const currentRole: Role = (driftUser?.role as Role) || 'dev'
+  const currentRole: Role = driftUser?.role || 'dev'
 
   // Load data
   useEffect(() => {
@@ -55,15 +54,26 @@ export default function App() {
     const loadData = async () => {
       setLoading(true)
       try {
-        await syncUser(clerkUser.id, clerkUser.primaryEmailAddress?.emailAddress || '', orgId)
-        const [briefsData, subsData, userData] = await Promise.all([
+        await syncUser({
+          id: clerkUser.id,
+          orgId: orgId,
+          email: clerkUser.primaryEmailAddress?.emailAddress || '',
+          name: clerkUser.fullName || clerkUser.username || 'User',
+          avatarUrl: clerkUser.imageUrl,
+        })
+        const [briefsData, userData] = await Promise.all([
           fetchBriefs(orgId),
-          fetchSubmissions(orgId),
           fetchUser(clerkUser.id),
         ])
         setBriefs(briefsData)
-        setSubmissions(subsData)
         setDriftUser(userData)
+        
+        // Fetch submissions for all briefs
+        if (briefsData.length > 0) {
+          const briefIds = briefsData.map(b => b.id)
+          const subsData = await fetchSubmissions(briefIds)
+          setSubmissions(subsData)
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load data')
       } finally {
@@ -74,21 +84,17 @@ export default function App() {
   }, [isSignedIn, clerkUser, orgId])
 
   const handleCreateBrief = async () => {
-    if (!newBriefTitle.trim() || !orgId || !clerkUser) return
+    if (!newBriefName.trim() || !orgId || !clerkUser) return
     setLoading(true)
     try {
       const newBrief = await createBrief({
-        title: newBriefTitle,
-        org_id: orgId,
-        created_by: clerkUser.id,
-        content: {
-          pm: { summary: 'New brief created', userStories: [], acceptanceCriteria: [] },
-          dev: { architecture: '', apiEndpoints: [], techStack: [] },
-          designer: { userFlow: [], wireframes: [], designSystem: [] },
-        },
+        orgId: orgId,
+        name: newBriefName,
+        description: '',
+        createdBy: clerkUser.id,
       })
       setBriefs([newBrief, ...briefs])
-      setNewBriefTitle('')
+      setNewBriefName('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create brief')
     } finally {
@@ -107,15 +113,18 @@ export default function App() {
   }
 
   const handleSubmit = async (briefId: string) => {
-    if (!clerkUser || !orgId) return
+    if (!clerkUser || !driftUser) return
     setLoading(true)
     try {
+      const brief = briefs.find(b => b.id === briefId)
       const newSub = await createSubmission({
-        brief_id: briefId,
-        user_id: clerkUser.id,
-        org_id: orgId,
-        summary: `Work completed for ${briefs.find(b => b.id === briefId)?.title}`,
-        tasks_done: ['Implementation complete', 'Tests passing', 'Documentation updated'],
+        briefId: briefId,
+        userId: clerkUser.id,
+        userName: driftUser.name,
+        role: currentRole,
+        summaryLines: [`Work completed for ${brief?.name || 'brief'}`],
+        durationMinutes: 60,
+        matchedTasks: [],
       })
       setSubmissions([newSub, ...submissions])
     } catch (err) {
@@ -225,7 +234,7 @@ export default function App() {
                       {currentView === 'dashboard' && 'Dashboard'}
                       {currentView === 'briefs' && 'Briefs'}
                       {currentView === 'reviews' && 'Reviews'}
-                      {currentView === 'brief-detail' && selectedBrief?.title}
+                      {currentView === 'brief-detail' && selectedBrief?.name}
                     </BreadcrumbPage>
                   </BreadcrumbItem>
                 </BreadcrumbList>
@@ -294,15 +303,15 @@ export default function App() {
                 <div className="rounded-xl border bg-card p-4">
                   <div className="flex gap-2">
                     <Input
-                      placeholder="New brief title..."
-                      value={newBriefTitle}
-                      onChange={(e) => setNewBriefTitle(e.target.value)}
+                      placeholder="New brief name..."
+                      value={newBriefName}
+                      onChange={(e) => setNewBriefName(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleCreateBrief()}
                       className="flex-1"
                     />
                     <Button 
                       onClick={handleCreateBrief} 
-                      disabled={!newBriefTitle.trim() || loading}
+                      disabled={!newBriefName.trim() || loading}
                       className="bg-emerald-500 hover:bg-emerald-600 text-black"
                     >
                       <Plus className="size-4 mr-2" />
@@ -325,9 +334,9 @@ export default function App() {
                       >
                         <div className={`size-2 rounded-full ${brief.status === 'active' ? 'bg-emerald-400' : 'bg-yellow-400'}`} />
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{brief.title}</div>
+                          <div className="font-medium truncate">{brief.name}</div>
                           <div className="text-xs text-muted-foreground">
-                            {new Date(brief.created_at).toLocaleDateString()}
+                            {brief.description || 'No description'}
                           </div>
                         </div>
                         <span className={`text-xs px-2 py-1 rounded ${
@@ -365,9 +374,9 @@ export default function App() {
                     >
                       <FileText className="size-5 text-muted-foreground" />
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">{brief.title}</div>
+                        <div className="font-medium truncate">{brief.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          Created {new Date(brief.created_at).toLocaleDateString()}
+                          {brief.description || 'No description'}
                         </div>
                       </div>
                       <span className={`text-xs px-2 py-1 rounded ${
@@ -400,9 +409,9 @@ export default function App() {
                     <div key={sub.id} className="p-4">
                       <div className="flex items-start justify-between mb-3">
                         <div>
-                          <div className="font-medium">{sub.summary}</div>
+                          <div className="font-medium">{sub.userName} - {sub.role.toUpperCase()}</div>
                           <div className="text-xs text-muted-foreground">
-                            {new Date(sub.created_at).toLocaleDateString()}
+                            {sub.durationMinutes} minutes worked
                           </div>
                         </div>
                         <span className={`text-xs px-2 py-1 rounded flex items-center gap-1 ${
@@ -419,8 +428,8 @@ export default function App() {
                       </div>
                       <div className="text-sm text-muted-foreground mb-3">
                         <ul className="list-disc list-inside">
-                          {sub.tasks_done.map((task, i) => (
-                            <li key={i}>{task}</li>
+                          {sub.summaryLines.map((line, i) => (
+                            <li key={i}>{line}</li>
                           ))}
                         </ul>
                       </div>
@@ -474,7 +483,7 @@ export default function App() {
 
                 <div className="rounded-xl border bg-card p-6">
                   <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-2xl font-bold">{selectedBrief.title}</h1>
+                    <h1 className="text-2xl font-bold">{selectedBrief.name}</h1>
                     <span className={`text-xs px-3 py-1 rounded ${
                       selectedBrief.status === 'active' 
                         ? 'bg-emerald-500/20 text-emerald-400' 
@@ -484,76 +493,112 @@ export default function App() {
                     </span>
                   </div>
 
+                  {selectedBrief.description && (
+                    <p className="text-muted-foreground mb-6">{selectedBrief.description}</p>
+                  )}
+
                   {/* Role-specific content */}
-                  <div className="space-y-6">
-                    {currentRole === 'pm' && selectedBrief.content.pm && (
-                      <div className="space-y-4">
-                        <div>
-                          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">Summary</h3>
-                          <p>{selectedBrief.content.pm.summary}</p>
-                        </div>
-                        {selectedBrief.content.pm.userStories.length > 0 && (
+                  {selectedBrief.content && (
+                    <div className="space-y-6">
+                      {currentRole === 'pm' && selectedBrief.content.userStories && (
+                        <div className="space-y-4">
                           <div>
                             <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">User Stories</h3>
-                            <ul className="list-disc list-inside space-y-1">
-                              {selectedBrief.content.pm.userStories.map((story, i) => (
-                                <li key={i}>{story}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {currentRole === 'dev' && selectedBrief.content.dev && (
-                      <div className="space-y-4">
-                        {selectedBrief.content.dev.architecture && (
-                          <div>
-                            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">Architecture</h3>
-                            <div className="font-mono text-sm bg-muted/50 p-4 rounded-lg">
-                              {selectedBrief.content.dev.architecture}
-                            </div>
-                          </div>
-                        )}
-                        {selectedBrief.content.dev.techStack.length > 0 && (
-                          <div>
-                            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">Tech Stack</h3>
-                            <div className="flex flex-wrap gap-2">
-                              {selectedBrief.content.dev.techStack.map((tech, i) => (
-                                <span key={i} className="px-2 py-1 bg-cyan-500/20 text-cyan-400 text-xs rounded">
-                                  {tech}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {currentRole === 'designer' && selectedBrief.content.designer && (
-                      <div className="space-y-4">
-                        {selectedBrief.content.designer.userFlow.length > 0 && (
-                          <div>
-                            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">User Flow</h3>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {selectedBrief.content.designer.userFlow.map((step, i) => (
-                                <span key={i} className="flex items-center gap-2">
-                                  <span className="px-3 py-2 bg-violet-500/20 text-violet-400 text-sm rounded">
-                                    {step}
-                                  </span>
-                                  {i < selectedBrief.content.designer.userFlow.length - 1 && (
-                                    <span className="text-muted-foreground">→</span>
+                            <div className="space-y-2">
+                              {selectedBrief.content.userStories.map((story, i) => (
+                                <div key={i} className="p-3 bg-muted/50 rounded-lg">
+                                  <div className="font-medium">{story.title}</div>
+                                  {story.acceptance.length > 0 && (
+                                    <ul className="mt-2 list-disc list-inside text-sm text-muted-foreground">
+                                      {story.acceptance.map((criteria, j) => (
+                                        <li key={j}>{criteria}</li>
+                                      ))}
+                                    </ul>
                                   )}
-                                </span>
+                                </div>
                               ))}
                             </div>
                           </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </>
+                        </div>
+                      )}
+
+                      {currentRole === 'dev' && (
+                        <div className="space-y-4">
+                          {selectedBrief.content.architecture && selectedBrief.content.architecture.length > 0 && (
+                            <div>
+                              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">Architecture</h3>
+                              <div className="flex flex-wrap gap-2">
+                                {selectedBrief.content.architecture.map((item, i) => (
+                                  <span key={i} className="px-3 py-2 bg-cyan-500/20 text-cyan-400 text-sm rounded">
+                                    {item.label}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {selectedBrief.content.apiEndpoints && selectedBrief.content.apiEndpoints.length > 0 && (
+                            <div>
+                              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">API Endpoints</h3>
+                              <div className="space-y-2">
+                                {selectedBrief.content.apiEndpoints.map((endpoint, i) => (
+                                  <div key={i} className="p-3 bg-muted/50 rounded-lg font-mono text-sm">
+                                    <div className="font-medium">{endpoint.title}</div>
+                                    <div className="text-muted-foreground mt-1">Request: {endpoint.request}</div>
+                                    <div className="text-muted-foreground">Response: {endpoint.response}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {currentRole === 'designer' && (
+                        <div className="space-y-4">
+                          {selectedBrief.content.userFlow && selectedBrief.content.userFlow.length > 0 && (
+                            <div>
+                              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">User Flow</h3>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {selectedBrief.content.userFlow.map((step, i) => (
+                                  <span key={i} className="flex items-center gap-2">
+                                    <span className="px-3 py-2 bg-violet-500/20 text-violet-400 text-sm rounded">
+                                      {step}
+                                    </span>
+                                    {i < selectedBrief.content!.userFlow.length - 1 && (
+                                      <span className="text-muted-foreground">→</span>
+                                    )}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {selectedBrief.content.componentSpec && selectedBrief.content.componentSpec.length > 0 && (
+      <div>
+                              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">Components</h3>
+                              <div className="grid gap-2 md:grid-cols-2">
+                                {selectedBrief.content.componentSpec.map((comp, i) => (
+                                  <div key={i} className="p-3 bg-muted/50 rounded-lg">
+                                    <div className="font-medium">{comp.name}</div>
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      {comp.height} · {comp.radius} · {comp.color}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!selectedBrief.content && (
+                    <div className="text-center text-muted-foreground py-8">
+                      No content available for this brief yet.
+      </div>
+                  )}
+      </div>
+    </>
             )}
           </div>
         </SidebarInset>
