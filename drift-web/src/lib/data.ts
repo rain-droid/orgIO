@@ -139,6 +139,15 @@ export async function createBrief(input: {
   } as Brief
 }
 
+export async function deleteBrief(briefId: string) {
+  const { error } = await supabase
+    .from('briefs')
+    .delete()
+    .eq('id', briefId)
+
+  if (error) throw error
+}
+
 export async function fetchTasks(briefIds: string[]) {
   if (briefIds.length === 0) return [] as Task[]
   const { data, error } = await supabase

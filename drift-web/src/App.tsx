@@ -12,14 +12,29 @@ import type { Brief, Submission, User, Role } from './types'
 import {
   fetchBriefs,
   createBrief,
+  deleteBrief,
   fetchSubmissions,
   createSubmission,
   updateSubmissionStatus,
   fetchUser,
 } from './lib/data'
-import { Send, Sparkles, FileText, CheckCircle, Clock, ArrowRight, Loader2 } from 'lucide-react'
+import { 
+  ArrowRight, 
+  Loader2, 
+  Sparkles, 
+  Trash2, 
+  CheckCircle, 
+  Clock,
+  MoreHorizontal,
+  Send,
+  Code,
+  Palette,
+  LayoutGrid,
+  FileText,
+  X
+} from 'lucide-react'
 
-type View = 'home' | 'brief-chat' | 'briefs' | 'reviews'
+type View = 'home' | 'brief' | 'reviews'
 
 export default function App() {
   const { isSignedIn, user: clerkUser } = useUser()
@@ -35,17 +50,16 @@ export default function App() {
   const [generating, setGenerating] = useState(false)
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [checkingUser, setCheckingUser] = useState(true)
-  const [chatMessages, setChatMessages] = useState<{role: 'user' | 'ai', content: string}[]>([])
+  const [generatedContent, setGeneratedContent] = useState<string | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
   const currentRole: Role = driftUser?.role || 'dev'
 
-  // Check if user exists and needs onboarding
   useEffect(() => {
     if (!isSignedIn || !clerkUser || !orgId) {
       setCheckingUser(false)
       return
     }
-
     const checkUser = async () => {
       try {
         const userData = await fetchUser(clerkUser.id)
@@ -79,11 +93,6 @@ export default function App() {
       setDriftUser(userData)
       const briefsData = await fetchBriefs(orgId)
       setBriefs(briefsData)
-      if (briefsData.length > 0) {
-        const briefIds = briefsData.map(b => b.id)
-        const subsData = await fetchSubmissions(briefIds)
-        setSubmissions(subsData)
-      }
     } finally {
       setCheckingUser(false)
     }
@@ -94,39 +103,45 @@ export default function App() {
     setLoading(true)
     try {
       const newBrief = await createBrief({
-        orgId: orgId,
+        orgId,
         name: inputValue,
         description: '',
         createdBy: clerkUser.id,
       })
       setBriefs([newBrief, ...briefs])
       setSelectedBrief(newBrief)
-      setChatMessages([{ role: 'user', content: inputValue }])
       setInputValue('')
-      setCurrentView('brief-chat')
+      setCurrentView('brief')
       
       // Simulate AI generation
       setGenerating(true)
       setTimeout(() => {
-        const roleContent = getRoleSpecificContent(currentRole, inputValue)
-        setChatMessages(prev => [...prev, { role: 'ai', content: roleContent }])
+        setGeneratedContent(generateRoleContent(currentRole, inputValue))
         setGenerating(false)
-      }, 2000)
-    } catch (err) {
-      console.error(err)
+      }, 1500)
     } finally {
       setLoading(false)
     }
   }
 
-  const getRoleSpecificContent = (role: Role, briefName: string): string => {
-    if (role === 'pm') {
-      return `## ${briefName}\n\n### User Stories\n- As a user, I want to...\n- As an admin, I want to...\n\n### Acceptance Criteria\n- [ ] Feature works as expected\n- [ ] Tests are passing\n- [ ] Documentation updated\n\n### Timeline\n- Sprint 1: Research & Design\n- Sprint 2: Implementation\n- Sprint 3: Testing & Launch`
-    } else if (role === 'dev') {
-      return `## ${briefName}\n\n### Architecture\n\`\`\`\nClient → API Gateway → Service → Database\n\`\`\`\n\n### Tech Stack\n- Frontend: React + TypeScript\n- Backend: Node.js\n- Database: PostgreSQL\n\n### API Endpoints\n- \`POST /api/...\`\n- \`GET /api/...\`\n- \`PUT /api/...\``
-    } else {
-      return `## ${briefName}\n\n### User Flow\nLanding → Sign Up → Dashboard → Feature → Success\n\n### Components\n- Primary Button: 48px height, 8px radius\n- Card: 16px padding, 1px border\n- Input: 40px height, no radius\n\n### States\n- Default\n- Hover\n- Active\n- Disabled`
+  const handleDeleteBrief = async (briefId: string) => {
+    try {
+      await deleteBrief(briefId)
+      setBriefs(briefs.filter(b => b.id !== briefId))
+      if (selectedBrief?.id === briefId) {
+        setSelectedBrief(null)
+        setCurrentView('home')
+      }
+      setDeleteConfirm(null)
+    } catch (err) {
+      console.error(err)
     }
+  }
+
+  const handleBriefSelect = (brief: Brief) => {
+    setSelectedBrief(brief)
+    setGeneratedContent(generateRoleContent(currentRole, brief.name))
+    setCurrentView('brief')
   }
 
   const handleSubmitWork = async () => {
@@ -138,49 +153,25 @@ export default function App() {
         userId: clerkUser.id,
         userName: driftUser.name,
         role: currentRole,
-        summaryLines: [`Work completed for ${selectedBrief.name}`],
+        summaryLines: [`Completed work on ${selectedBrief.name}`],
         durationMinutes: 60,
         matchedTasks: [],
       })
       setSubmissions([newSub, ...submissions])
-      setChatMessages(prev => [...prev, 
-        { role: 'user', content: 'Work submitted for review ✓' },
-        { role: 'ai', content: 'Great work! Your submission has been sent to the PM for review.' }
-      ])
-    } catch (err) {
-      console.error(err)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleReview = async (submissionId: string, status: 'approved' | 'rejected') => {
-    setLoading(true)
-    try {
-      await updateSubmissionStatus(submissionId, status)
-      setSubmissions(submissions.map(s => 
-        s.id === submissionId ? { ...s, status } : s
-      ))
-    } finally {
-      setLoading(false)
-    }
+  const handleReview = async (subId: string, status: 'approved' | 'rejected') => {
+    await updateSubmissionStatus(subId, status)
+    setSubmissions(submissions.map(s => s.id === subId ? { ...s, status } : s))
   }
 
-  const handleBriefSelect = (brief: Brief) => {
-    setSelectedBrief(brief)
-    setChatMessages([
-      { role: 'user', content: brief.name },
-      { role: 'ai', content: getRoleSpecificContent(currentRole, brief.name) }
-    ])
-    setCurrentView('brief-chat')
-  }
-
-  const handleViewChange = (view: 'home' | 'briefs' | 'reviews') => {
-    setCurrentView(view)
-    if (view === 'home') {
-      setSelectedBrief(null)
-      setChatMessages([])
-    }
+  const generateRoleContent = (role: Role, name: string) => {
+    if (role === 'pm') return 'pm'
+    if (role === 'dev') return 'dev'
+    return 'designer'
   }
 
   const userData = clerkUser ? {
@@ -189,24 +180,22 @@ export default function App() {
     avatar: clerkUser.imageUrl,
   } : undefined
 
-  const pendingReviews = submissions.filter(s => s.status === 'pending').length
-  const activeBriefs = briefs.filter(b => b.status === 'active').length
+  const roleIcon = currentRole === 'pm' ? LayoutGrid : currentRole === 'dev' ? Code : Palette
+  const roleColor = currentRole === 'pm' ? 'text-blue-400' : currentRole === 'dev' ? 'text-emerald-400' : 'text-violet-400'
+  const roleBg = currentRole === 'pm' ? 'bg-blue-500/10' : currentRole === 'dev' ? 'bg-emerald-500/10' : 'bg-violet-500/10'
 
   // Not signed in
   if (!isSignedIn) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-6">
-          <div className="flex items-center justify-center gap-3">
-            <div className="bg-primary text-primary-foreground flex aspect-square size-12 items-center justify-center">
-              <FileText className="size-6" />
-            </div>
-            <h1 className="text-3xl font-bold">Drift</h1>
+        <div className="text-center space-y-8 animate-fadeIn">
+          <div className="space-y-2">
+            <h1 className="text-5xl font-bold tracking-tight">DRIFT</h1>
+            <p className="text-muted-foreground text-lg">One brief. Three views. Zero meetings.</p>
           </div>
-          <p className="text-muted-foreground font-mono text-sm">AI-powered sprint planning</p>
           <SignInButton mode="modal">
-            <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              Sign In to Continue
+            <Button size="lg" className="h-12 px-8 text-base">
+              Get Started <ArrowRight className="ml-2 size-4" />
             </Button>
           </SignInButton>
         </div>
@@ -214,19 +203,14 @@ export default function App() {
     )
   }
 
-  // Loading
   if (checkingUser) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <Loader2 className="size-8 animate-spin mx-auto text-primary" />
-          <p className="text-muted-foreground font-mono text-sm">Loading...</p>
-        </div>
+        <Loader2 className="size-8 animate-spin text-muted-foreground" />
       </div>
     )
   }
 
-  // Needs onboarding
   if (!orgId || needsOnboarding) {
     return <Onboarding onComplete={handleOnboardingComplete} />
   }
@@ -237,270 +221,340 @@ export default function App() {
         user={userData}
         briefs={briefs}
         onBriefSelect={handleBriefSelect}
-        onViewChange={handleViewChange}
+        onViewChange={(v) => { setCurrentView(v as View); setSelectedBrief(null); }}
         currentView={currentView}
         userRole={currentRole}
       />
-      <SidebarInset>
-        {/* Header */}
-        <header className="flex h-14 items-center gap-4 border-b px-4">
-          <SidebarTrigger />
+      <SidebarInset className="flex flex-col">
+        {/* Minimal Header */}
+        <header className="h-12 flex items-center px-4 border-b border-border/50">
+          <SidebarTrigger className="size-8" />
           <div className="flex-1" />
-          <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-            <span className={`px-2 py-1 ${
-              currentRole === 'pm' ? 'bg-pink-100 text-pink-700' :
-              currentRole === 'dev' ? 'bg-blue-100 text-blue-700' :
-              'bg-purple-100 text-purple-700'
-            }`}>
-              {currentRole.toUpperCase()}
-            </span>
+          <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${roleBg}`}>
+            {roleIcon({ className: `size-3.5 ${roleColor}` })}
+            <span className={`text-xs font-medium ${roleColor}`}>{currentRole.toUpperCase()}</span>
           </div>
-          <UserButton afterSignOutUrl="/" />
+          <div className="ml-4">
+            <UserButton afterSignOutUrl="/" />
+          </div>
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 p-6">
-          {/* Home View */}
+        <main className="flex-1 overflow-auto">
+          {/* HOME VIEW */}
           {currentView === 'home' && (
-            <div className="max-w-4xl mx-auto space-y-8">
-              {/* Big Input */}
-              <div className="space-y-4">
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Plan a new brief for your team to handle..."
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleCreateBrief()}
-                    className="w-full h-14 px-4 pr-24 bg-card border text-base font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <Button
-                    onClick={handleCreateBrief}
-                    disabled={!inputValue.trim() || loading}
-                    className="absolute right-2 top-2 h-10 bg-primary hover:bg-primary/90 text-primary-foreground"
-                  >
-                    {loading ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
-                  </Button>
+            <div className="min-h-full flex flex-col">
+              {/* Hero Input Section */}
+              <div className="flex-1 flex items-center justify-center p-8">
+                <div className="w-full max-w-2xl space-y-6 animate-slideUp">
+                  <div className="text-center space-y-2">
+                    <h1 className="text-3xl font-semibold">What are we building?</h1>
+                    <p className="text-muted-foreground">
+                      Describe your feature. AI generates {currentRole === 'pm' ? 'user stories & timeline' : currentRole === 'dev' ? 'architecture & API specs' : 'user flows & components'}.
+                    </p>
+                  </div>
+                  
+                  {/* Big Input */}
+                  <div className="relative">
+                    <textarea
+                      placeholder="e.g. Apple Pay Checkout, User Authentication, Dashboard Redesign..."
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleCreateBrief())}
+                      className="w-full h-32 p-6 bg-card border border-border rounded-lg text-lg resize-none placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                    />
+                    <Button
+                      onClick={handleCreateBrief}
+                      disabled={!inputValue.trim() || loading}
+                      className="absolute bottom-4 right-4 h-10 px-6"
+                    >
+                      {loading ? <Loader2 className="size-4 animate-spin" /> : <>Create <ArrowRight className="ml-2 size-4" /></>}
+                    </Button>
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground font-mono">
-                  Describe what needs to be built. AI will generate {currentRole === 'pm' ? 'user stories & acceptance criteria' : currentRole === 'dev' ? 'architecture & API specs' : 'user flows & component specs'}.
-                </p>
               </div>
 
-              {/* Two Column Layout */}
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Active Briefs */}
-                <div className="border bg-card">
-                  <div className="p-4 border-b flex items-center justify-between">
-      <div>
-                      <h2 className="font-semibold">Active Briefs</h2>
-                      <p className="text-xs text-muted-foreground font-mono">What you're working on</p>
-                    </div>
-                    <span className="text-xs font-mono text-muted-foreground">{activeBriefs}</span>
-                  </div>
-                  <div className="divide-y max-h-80 overflow-auto">
-                    {briefs.filter(b => b.status === 'active').map(brief => (
-                      <button
-                        key={brief.id}
-                        onClick={() => handleBriefSelect(brief)}
-                        className="w-full p-4 text-left hover:bg-accent/50 transition-colors flex items-center gap-3"
-                      >
-                        <div className="size-2 bg-chart-1 rounded-full" />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate text-sm">{brief.name}</div>
-                          <div className="text-xs text-muted-foreground font-mono">Active</div>
-      </div>
-                        <ArrowRight className="size-4 text-muted-foreground" />
-        </button>
-                    ))}
-                    {activeBriefs === 0 && (
-                      <div className="p-8 text-center text-muted-foreground text-sm font-mono">
-                        No active briefs
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Pending Reviews (for PM) or Submissions (for others) */}
-                <div className="border bg-card">
-                  <div className="p-4 border-b flex items-center justify-between">
-                    <div>
-                      <h2 className="font-semibold">{currentRole === 'pm' ? 'Pending Reviews' : 'Your Submissions'}</h2>
-                      <p className="text-xs text-muted-foreground font-mono">
-                        {currentRole === 'pm' ? 'Requires your attention' : 'Track your work'}
-        </p>
-      </div>
-                    <span className="text-xs font-mono text-muted-foreground">{pendingReviews}</span>
-                  </div>
-                  <div className="divide-y max-h-80 overflow-auto">
-                    {submissions.map(sub => (
-                      <div key={sub.id} className="p-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <div>
-                            <div className="font-medium text-sm">{sub.userName}</div>
-                            <div className="text-xs text-muted-foreground font-mono">{sub.role.toUpperCase()}</div>
-                          </div>
-                          <span className={`text-xs px-2 py-1 flex items-center gap-1 ${
-                            sub.status === 'approved' ? 'bg-green-100 text-green-700' :
-                            sub.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                            'bg-yellow-100 text-yellow-700'
-                          }`}>
-                            {sub.status === 'approved' && <CheckCircle className="size-3" />}
-                            {sub.status === 'pending' && <Clock className="size-3" />}
-                            {sub.status}
-                          </span>
+              {/* Recent Briefs */}
+              {briefs.length > 0 && (
+                <div className="border-t border-border/50 p-8">
+                  <div className="max-w-4xl mx-auto">
+                    <h2 className="text-sm font-medium text-muted-foreground mb-4">RECENT BRIEFS</h2>
+                    <div className="grid gap-2">
+                      {briefs.slice(0, 5).map(brief => (
+                        <div
+                          key={brief.id}
+                          className="group flex items-center gap-4 p-4 bg-card/50 hover:bg-card border border-transparent hover:border-border rounded-lg cursor-pointer transition-all"
+                          onClick={() => handleBriefSelect(brief)}
+                        >
+                          <div className={`size-2 rounded-full ${brief.status === 'active' ? 'bg-emerald-400' : 'bg-muted-foreground'}`} />
+                          <span className="flex-1 font-medium">{brief.name}</span>
+                          <span className="text-xs text-muted-foreground">{brief.status}</span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setDeleteConfirm(brief.id); }}
+                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-all"
+                          >
+                            <Trash2 className="size-4 text-destructive" />
+                          </button>
                         </div>
-                        {sub.status === 'pending' && currentRole === 'pm' && (
-                          <div className="flex gap-2 mt-3">
-                            <Button size="sm" onClick={() => handleReview(sub.id, 'approved')} className="h-7 text-xs">
-                              Approve
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => handleReview(sub.id, 'rejected')} className="h-7 text-xs">
-                              Reject
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    {submissions.length === 0 && (
-                      <div className="p-8 text-center text-muted-foreground text-sm font-mono">
-                        No submissions yet
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Brief Chat View */}
-          {currentView === 'brief-chat' && selectedBrief && (
-            <div className="max-w-3xl mx-auto">
-              {/* Chat Messages */}
-              <div className="space-y-6 mb-6">
-                {chatMessages.map((msg, i) => (
-                  <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
-                    {msg.role === 'ai' && (
-                      <div className="size-8 bg-primary text-primary-foreground flex items-center justify-center shrink-0">
-                        <Sparkles className="size-4" />
-                      </div>
-                    )}
-                    <div className={`max-w-2xl ${
-                      msg.role === 'user' 
-                        ? 'bg-primary text-primary-foreground px-4 py-3' 
-                        : 'bg-card border px-4 py-3'
-                    }`}>
-                      {msg.role === 'ai' ? (
-                        <div className="prose prose-sm max-w-none font-mono text-sm whitespace-pre-wrap">
-                          {msg.content}
-                        </div>
-                      ) : (
-                        <p className="font-mono text-sm">{msg.content}</p>
-                      )}
+                      ))}
                     </div>
                   </div>
-                ))}
-                {generating && (
-                  <div className="flex gap-3">
-                    <div className="size-8 bg-primary text-primary-foreground flex items-center justify-center shrink-0">
-                      <Sparkles className="size-4" />
-                    </div>
-                    <div className="bg-card border px-4 py-3">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground font-mono">
-                        <Loader2 className="size-4 animate-spin" />
-                        Generating {currentRole === 'pm' ? 'user stories' : currentRole === 'dev' ? 'architecture' : 'design specs'}...
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Actions */}
-              {!generating && chatMessages.length > 0 && currentRole !== 'pm' && (
-                <div className="border-t pt-4">
-                  <Button onClick={handleSubmitWork} disabled={loading} className="w-full h-12">
-                    <Send className="size-4 mr-2" />
-                    Submit Work for Review
-                  </Button>
                 </div>
               )}
-
-              {/* Back Button */}
-              <div className="mt-6">
-                <Button variant="ghost" onClick={() => handleViewChange('home')} className="text-muted-foreground">
-                  ← Back to Home
-                </Button>
-              </div>
             </div>
           )}
 
-          {/* Briefs List View */}
-          {currentView === 'briefs' && (
-            <div className="max-w-2xl mx-auto">
-              <h1 className="text-xl font-semibold mb-6">All Briefs</h1>
-              <div className="border bg-card divide-y">
-                {briefs.map(brief => (
-                  <button
-                    key={brief.id}
-                    onClick={() => handleBriefSelect(brief)}
-                    className="w-full p-4 text-left hover:bg-accent/50 transition-colors flex items-center gap-3"
-                  >
-                    <FileText className="size-4 text-muted-foreground" />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{brief.name}</div>
-                      <div className="text-xs text-muted-foreground font-mono">{brief.status}</div>
-                    </div>
-                  </button>
-                ))}
-                {briefs.length === 0 && (
-                  <div className="p-8 text-center text-muted-foreground font-mono text-sm">
-                    No briefs yet
+          {/* BRIEF VIEW */}
+          {currentView === 'brief' && selectedBrief && (
+            <div className="p-8 animate-fadeIn">
+              <div className="max-w-4xl mx-auto space-y-8">
+                {/* Brief Header */}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <button 
+                      onClick={() => { setCurrentView('home'); setSelectedBrief(null); }}
+                      className="text-sm text-muted-foreground hover:text-foreground mb-2 transition-colors"
+                    >
+                      ← Back
+                    </button>
+                    <h1 className="text-2xl font-semibold">{selectedBrief.name}</h1>
                   </div>
-                )}
-              </div>
-            </div>
-          )}
+                  <div className="flex items-center gap-2">
+                    {currentRole !== 'pm' && (
+                      <Button onClick={handleSubmitWork} disabled={loading}>
+                        <Send className="size-4 mr-2" /> Submit Work
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="icon" onClick={() => setDeleteConfirm(selectedBrief.id)}>
+                      <MoreHorizontal className="size-4" />
+                    </Button>
+                  </div>
+                </div>
 
-          {/* Reviews View */}
-          {currentView === 'reviews' && (
-            <div className="max-w-2xl mx-auto">
-              <h1 className="text-xl font-semibold mb-6">Reviews</h1>
-              <div className="border bg-card divide-y">
-                {submissions.map(sub => (
-                  <div key={sub.id} className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <div className="font-medium">{sub.userName}</div>
-                        <div className="text-xs text-muted-foreground font-mono">{sub.role.toUpperCase()} • {sub.durationMinutes}min</div>
-                      </div>
-                      <span className={`text-xs px-2 py-1 ${
-                        sub.status === 'approved' ? 'bg-green-100 text-green-700' :
-                        sub.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                        'bg-yellow-100 text-yellow-700'
-                      }`}>
-                        {sub.status}
-                      </span>
+                {/* Generated Content */}
+                {generating ? (
+                  <div className="flex items-center gap-3 p-6 bg-card border border-border rounded-lg">
+                    <div className={`size-10 rounded-lg ${roleBg} flex items-center justify-center`}>
+                      <Sparkles className={`size-5 ${roleColor} animate-pulse`} />
                     </div>
-                    <ul className="text-sm text-muted-foreground font-mono">
-                      {sub.summaryLines.map((line, i) => <li key={i}>• {line}</li>)}
-                    </ul>
-                    {sub.status === 'pending' && currentRole === 'pm' && (
-                      <div className="flex gap-2 mt-3">
-                        <Button size="sm" onClick={() => handleReview(sub.id, 'approved')}>Approve</Button>
-                        <Button size="sm" variant="outline" onClick={() => handleReview(sub.id, 'rejected')}>Reject</Button>
-                      </div>
+                    <div>
+                      <p className="font-medium">Generating your {currentRole === 'pm' ? 'sprint plan' : currentRole === 'dev' ? 'technical spec' : 'design spec'}...</p>
+                      <p className="text-sm text-muted-foreground">AI is analyzing your brief</p>
+                    </div>
+                  </div>
+                ) : generatedContent && (
+                  <div className="space-y-6">
+                    {/* PM View */}
+                    {currentRole === 'pm' && (
+                      <>
+                        {/* Kanban */}
+                        <div className="bg-card border border-border rounded-lg p-6">
+                          <h3 className="text-sm font-medium text-muted-foreground mb-4">📊 SPRINT BOARD</h3>
+                          <div className="grid grid-cols-3 gap-4">
+                            {['To Do', 'In Progress', 'Done'].map(col => (
+                              <div key={col} className="space-y-3">
+                                <div className="text-xs font-medium text-muted-foreground">{col}</div>
+                                {col === 'To Do' && (
+                                  <>
+                                    <div className="p-3 bg-background border border-border rounded">Setup payment intent</div>
+                                    <div className="p-3 bg-background border border-border rounded">Handle webhook</div>
+                                  </>
+                                )}
+                                {col === 'In Progress' && (
+                                  <div className="p-3 bg-background border border-border rounded">UI integration</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* User Stories */}
+                        <div className="bg-card border border-border rounded-lg p-6">
+                          <h3 className="text-sm font-medium text-muted-foreground mb-4">📝 USER STORIES</h3>
+                          <div className="space-y-3">
+                            <div className="p-4 bg-background border border-border rounded">
+                              <p className="font-medium mb-2">As a customer, I want to pay quickly so I can complete checkout faster.</p>
+                              <div className="text-sm text-muted-foreground space-y-1">
+                                <p>✓ Payment button visible when supported</p>
+                                <p>✓ Fallback for unsupported devices</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Timeline */}
+                        <div className="bg-card border border-border rounded-lg p-6">
+                          <h3 className="text-sm font-medium text-muted-foreground mb-4">⏱️ TIMELINE</h3>
+                          <div className="flex items-center gap-2">
+                            {['Backend', 'Frontend', 'Testing', 'Launch'].map((phase, i) => (
+                              <div key={phase} className="flex items-center">
+                                <div className={`px-4 py-2 rounded ${i < 2 ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                                  {phase}
+                                </div>
+                                {i < 3 && <div className="w-4 h-px bg-border" />}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Dev View */}
+                    {currentRole === 'dev' && (
+                      <>
+                        {/* Architecture */}
+                        <div className="bg-card border border-border rounded-lg p-6">
+                          <h3 className="text-sm font-medium text-muted-foreground mb-4">🔧 ARCHITECTURE</h3>
+                          <div className="flex items-center justify-center gap-4 py-8">
+                            <div className="px-6 py-3 bg-background border border-border rounded">Client</div>
+                            <div className="text-muted-foreground">→</div>
+                            <div className="px-6 py-3 bg-background border border-border rounded">API</div>
+                            <div className="text-muted-foreground">→</div>
+                            <div className="px-6 py-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded">Stripe</div>
+                          </div>
+                        </div>
+
+                        {/* API Endpoints */}
+                        <div className="bg-card border border-border rounded-lg p-6">
+                          <h3 className="text-sm font-medium text-muted-foreground mb-4">📦 API ENDPOINTS</h3>
+                          <div className="font-mono text-sm space-y-4">
+                            <div className="p-4 bg-background border border-border rounded">
+                              <p className="text-emerald-400">POST /api/payments/create-intent</p>
+                              <p className="text-muted-foreground mt-2">Request: {'{ amount, currency }'}</p>
+                              <p className="text-muted-foreground">Response: {'{ clientSecret, paymentIntentId }'}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Code */}
+                        <div className="bg-card border border-border rounded-lg p-6">
+                          <h3 className="text-sm font-medium text-muted-foreground mb-4">💻 CODE</h3>
+                          <pre className="p-4 bg-background border border-border rounded font-mono text-sm overflow-x-auto">
+{`const payment = await stripe.paymentIntents.create({
+  amount: total * 100,
+  currency: 'usd',
+  payment_method_types: ['card'],
+});`}
+                          </pre>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Designer View */}
+                    {currentRole === 'designer' && (
+                      <>
+                        {/* User Flow */}
+                        <div className="bg-card border border-border rounded-lg p-6">
+                          <h3 className="text-sm font-medium text-muted-foreground mb-4">📱 USER FLOW</h3>
+                          <div className="flex items-center justify-center gap-2 py-6">
+                            {['Cart', 'Checkout', 'Payment', 'Success'].map((step, i) => (
+                              <div key={step} className="flex items-center">
+                                <div className="flex flex-col items-center">
+                                  <div className={`size-10 rounded-full flex items-center justify-center ${i < 3 ? 'bg-violet-500/20 text-violet-400' : 'bg-muted text-muted-foreground'}`}>
+                                    {i + 1}
+                                  </div>
+                                  <span className="text-xs mt-2">{step}</span>
+                                </div>
+                                {i < 3 && <div className="w-8 h-px bg-border mx-2" />}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Component Spec */}
+                        <div className="bg-card border border-border rounded-lg p-6">
+                          <h3 className="text-sm font-medium text-muted-foreground mb-4">🎨 COMPONENT SPEC</h3>
+                          <div className="flex items-center justify-center py-6">
+                            <div className="space-y-4 text-center">
+                              <button className="px-8 py-3 bg-foreground text-background rounded-lg font-medium">
+                                Pay with Apple Pay
+                              </button>
+                              <div className="text-xs text-muted-foreground">
+                                Height: 48px | Radius: 8px | Background: #000
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* States */}
+                        <div className="bg-card border border-border rounded-lg p-6">
+                          <h3 className="text-sm font-medium text-muted-foreground mb-4">🖼️ STATES</h3>
+                          <div className="flex items-center justify-center gap-6 py-4">
+                            {['Default', 'Hover', 'Loading', 'Disabled'].map((state, i) => (
+                              <div key={state} className="text-center">
+                                <div className={`w-24 h-10 rounded ${i === 3 ? 'bg-muted' : i === 2 ? 'bg-foreground/70' : 'bg-foreground'}`} />
+                                <span className="text-xs text-muted-foreground mt-2 block">{state}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
                     )}
                   </div>
-                ))}
-                {submissions.length === 0 && (
-                  <div className="p-8 text-center text-muted-foreground font-mono text-sm">
-                    No submissions yet
-                  </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* REVIEWS VIEW */}
+          {currentView === 'reviews' && (
+            <div className="p-8 animate-fadeIn">
+              <div className="max-w-2xl mx-auto">
+                <h1 className="text-2xl font-semibold mb-6">Submissions</h1>
+                <div className="space-y-4">
+                  {submissions.map(sub => (
+                    <div key={sub.id} className="p-6 bg-card border border-border rounded-lg">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <p className="font-medium">{sub.userName}</p>
+                          <p className="text-sm text-muted-foreground">{sub.role.toUpperCase()} • {sub.durationMinutes}m</p>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs flex items-center gap-1 ${
+                          sub.status === 'approved' ? 'bg-emerald-500/10 text-emerald-400' :
+                          sub.status === 'rejected' ? 'bg-destructive/10 text-destructive' :
+                          'bg-yellow-500/10 text-yellow-400'
+                        }`}>
+                          {sub.status === 'pending' ? <Clock className="size-3" /> : <CheckCircle className="size-3" />}
+                          {sub.status}
+                        </span>
+                      </div>
+                      <ul className="text-sm text-muted-foreground mb-4">
+                        {sub.summaryLines.map((line, i) => <li key={i}>• {line}</li>)}
+                      </ul>
+                      {sub.status === 'pending' && currentRole === 'pm' && (
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => handleReview(sub.id, 'approved')}>Approve</Button>
+                          <Button size="sm" variant="outline" onClick={() => handleReview(sub.id, 'rejected')}>Reject</Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {submissions.length === 0 && (
+                    <div className="text-center py-12 text-muted-foreground">
+                      No submissions yet
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
         </main>
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirm && (
+          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-card border border-border rounded-lg p-6 max-w-sm w-full mx-4 animate-slideUp">
+              <h3 className="font-semibold mb-2">Delete Brief?</h3>
+              <p className="text-sm text-muted-foreground mb-6">This action cannot be undone.</p>
+              <div className="flex gap-2 justify-end">
+                <Button variant="ghost" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+                <Button variant="destructive" onClick={() => handleDeleteBrief(deleteConfirm)}>
+                  <Trash2 className="size-4 mr-2" /> Delete
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </SidebarInset>
     </SidebarProvider>
   )
