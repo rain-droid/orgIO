@@ -7,8 +7,29 @@
 }
 
 .glass {
-  background-color: rgba(255, 255, 255, .71);
-  border: 1px solid rgba(255, 255, 255, .71);
+  position: relative;
+  overflow: hidden;
+  background: rgba(20, 24, 30, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+}
+
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.12),
+    rgba(255, 255, 255, 0) 40%,
+    rgba(0, 0, 0, 0.08) 100%
+  );
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 html, body {
@@ -17,7 +38,8 @@ html, body {
   font-weight: 500;
   margin: 0;
   overflow: hidden;
-  color: rgba(0,0,0,1)
+  color: rgba(0, 0, 0, 1);
+  background: #0b0d10;
 }
 
 /* Modern Scrollbar Styling */
@@ -45,4 +67,8 @@ body,
   height: 100%;
   margin: 0;
   /* line-height: 1.4; */
+}
+
+#app {
+  position: relative;
 }

@@ -25,6 +25,10 @@ export const registerWindowIPC = (mainWindow: BrowserWindow) => {
   handleIPC('window-minimize', () => mainWindow.minimize())
   handleIPC('window-maximize', () => mainWindow.maximize())
   handleIPC('window-close', () => mainWindow.close())
+  handleIPC('window-get-bounds', () => mainWindow.getBounds())
+  handleIPC('window-set-position', (_e, { x, y }: { x: number; y: number }) => {
+    mainWindow.setPosition(Math.round(x), Math.round(y))
+  })
   handleIPC('window-maximize-toggle', () => {
     if (mainWindow.isMaximized()) {
       mainWindow.unmaximize()

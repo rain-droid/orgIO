@@ -11,31 +11,46 @@ import { performance } from 'node:perf_hooks';
 export function createAppWindow(isInvisible = false, t0: number): BrowserWindow {
 
   const mainWindow = new BrowserWindow({
+    fullscreen: false,
     width: 900,
-    height: 700,
-    minWidth: 400,
-    minHeight: 300,
+    height: 600,
+    minWidth: 520,
+    minHeight: 420,
     skipTaskbar: false,
-    center: true,
     webPreferences: {
       preload: join(__dirname, '../preload/preload.js'),
-      sandbox: false,
-      contextIsolation: true,
-      nodeIntegration: false
+      sandbox: false
     },
-    show: false,
-    alwaysOnTop: false,
-    frame: true,
-    transparent: false,
-    hasShadow: true,
+    show: true,
+    alwaysOnTop: true,
+    frame: false,
+    transparent: true,
+    hasShadow: false,
     focusable: true,
     icon: appIcon,
+    titleBarStyle: 'hiddenInset',
     title: 'Drift',
     resizable: true,
-    backgroundColor: '#1c1c1c',
+    backgroundColor: '#0b0d10',
+    backgroundMaterial: 'auto',
   })
+
+  mainWindow.center()
   
-  mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+
+  if (!isInvisible) {
+    // Prevent the window from appearing in most software screen captures (Windows).
+    mainWindow.setContentProtection(true)
+    if (process.platform === 'win32') {
+      void import('@/lib/main/protectWindow')
+        .then(({ applyWindowCaptureProtection }) => {
+          applyWindowCaptureProtection(mainWindow)
+        })
+        .catch(() => {})
+    }
+  }
 
   // Register IPC events for the main window.
   registerWindowIPC(mainWindow)
@@ -44,8 +59,6 @@ export function createAppWindow(isInvisible = false, t0: number): BrowserWindow 
     console.log('[perf] ready-to-show', (performance.now() - t0).toFixed(1), 'ms');
     mainWindow.show()
     mainWindow.focus()
-    // Open DevTools to see errors
-    mainWindow.webContents.openDevTools()
   })
 
   const lastTime = { value: t0 };

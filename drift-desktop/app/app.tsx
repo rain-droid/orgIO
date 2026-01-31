@@ -57,8 +57,13 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
 function MainApp({ userEmail, onLogout }: { userEmail: string; onLogout: () => void }) {
   const isChatPaneVisible = useUIState((state) => state.matches('chat') || state.matches('live'))
   const [isWideChatPane, setIsWideChatPane] = useState(false)
+  const [dockPosition, setDockPosition] = useState<'top' | 'bottom'>('top')
 
   const chatPaneWidthClass = isWideChatPane ? 'w-[60vw]' : 'w-[40vw]'
+  const dockSizeClass = 'w-[520px] h-[56px]'
+  const dockPositionClass = dockPosition === 'top'
+    ? 'top-3 left-1/2 -translate-x-1/2'
+    : 'bottom-3 left-1/2 -translate-x-1/2'
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-start gap-1 pt-2">
@@ -73,7 +78,9 @@ function MainApp({ userEmail, onLogout }: { userEmail: string; onLogout: () => v
         </button>
       </div>
 
-      <Mainbar />
+      <div className={`fixed z-40 ${dockSizeClass} ${dockPositionClass}`}>
+        <Mainbar dockPosition={dockPosition} onDockChange={setDockPosition} />
+      </div>
 
       <div
         className={`overflow-hidden transition-all duration-300 ease-in-out ${isChatPaneVisible ? 'max-h-[45vh] opacity-100' : 'max-h-0 opacity-0'} px-4 ${chatPaneWidthClass}`}
@@ -95,11 +102,13 @@ export default function App() {
 
   useEffect(() => {
     // Check if we have a stored token
-    window.api.invoke('get-auth-token').then((token: string | null) => {
+    Promise.all([
+      window.api.invoke('get-auth-token'),
+      window.api.invoke('get-user-email')
+    ]).then(([token, email]: [string | null, string | null]) => {
       if (token) {
-        // TODO: Validate token and get user info
         setIsAuthenticated(true)
-        setUserEmail('user@drift.app') // Placeholder
+        setUserEmail(email || 'user@drift.app')
       }
       setIsLoading(false)
     })

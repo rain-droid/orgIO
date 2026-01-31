@@ -1,14 +1,27 @@
-import { X, Command, CornerDownLeft, Space, Eye, EyeOff, Circle } from 'lucide-react'
-import { useEffect, useState, useRef } from 'react'
+import { X, Command, CornerDownLeft, Space, Circle, GripHorizontal } from 'lucide-react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { Button } from '../ui/button'
 import { useUIActor } from '../../state/UIStateProvider'
 import { useSelector } from '@xstate/react'
 
-export const Mainbar = () => {
-  const [isInvisible, setIsInvisible] = useState(false)
+type DockPosition = 'top' | 'bottom'
+
+export const Mainbar = ({
+  dockPosition,
+  onDockChange,
+}: {
+  dockPosition: DockPosition
+  onDockChange: (position: DockPosition) => void
+}) => {
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const dragStateRef = useRef<{
+    startY: number
+    startWinY: number
+    winWidth: number
+    winHeight: number
+  } | null>(null)
 
   const uiActor = useUIActor()
   const { send } = uiActor
@@ -16,14 +29,6 @@ export const Mainbar = () => {
   const { chatActive } = useSelector(uiActor, (s) => ({
     chatActive: s.matches('chat')
   }))
-
-  // Sync initial invisibility state from main process
-  useEffect(() => {
-    const updateState = (state: boolean) => setIsInvisible(state)
-    window.api.invoke('get-invisibility-state').then(updateState).catch(() => {})
-    window.api.receive('invisibility-state-changed', updateState)
-    return () => window.api.removeAllListeners('invisibility-state-changed')
-  }, [])
 
   // Recording timer
   useEffect(() => {
@@ -62,16 +67,64 @@ export const Mainbar = () => {
     // TODO: Integrate with Drift backend for recording/work tracking
   }
 
-  const handleInvisibilityToggle = () => {
-    setIsInvisible((prevState) => !prevState)
-    window.api.send('toggle-invisibility')
-  }
+  const containerClass = 'glass rounded-full font-sans flex-none w-full h-full pl-5 pr-5'
+  const layoutClass = 'flex items-center justify-between w-full h-full'
+  const sectionClass = 'flex items-center gap-2'
+
+  const updateWindowPosition = useCallback(async (y: number) => {
+    const bounds = await window.api.invoke('window-get-bounds')
+    const x = Math.round((window.screen.availWidth - bounds.width) / 2)
+    await window.api.invoke('window-set-position', { x, y: Math.round(y) })
+  }, [])
+
+  const handleDragMove = useCallback(async (e: MouseEvent) => {
+    if (!dragStateRef.current) return
+    const { startY, startWinY, winHeight } = dragStateRef.current
+    const deltaY = e.screenY - startY
+    const padding = 12
+    const maxY = window.screen.availHeight - winHeight - padding
+    const nextY = Math.min(Math.max(startWinY + deltaY, padding), maxY)
+    await updateWindowPosition(nextY)
+  }, [updateWindowPosition])
+
+  const handleDragEnd = useCallback(async (e: MouseEvent) => {
+    if (!dragStateRef.current) return
+    const { winHeight } = dragStateRef.current
+    const padding = 12
+    const snapTop = e.screenY < window.screen.availHeight / 2
+    const targetY = snapTop ? padding : window.screen.availHeight - winHeight - padding
+    await updateWindowPosition(targetY)
+    onDockChange(snapTop ? 'top' : 'bottom')
+    dragStateRef.current = null
+    window.removeEventListener('mousemove', handleDragMove)
+    window.removeEventListener('mouseup', handleDragEnd)
+  }, [handleDragMove, onDockChange, updateWindowPosition])
+
+  const handleDragStart = useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault()
+    const bounds = await window.api.invoke('window-get-bounds')
+    dragStateRef.current = {
+      startY: e.screenY,
+      startWinY: bounds.y,
+      winWidth: bounds.width,
+      winHeight: bounds.height,
+    }
+    window.addEventListener('mousemove', handleDragMove)
+    window.addEventListener('mouseup', handleDragEnd)
+  }, [handleDragEnd, handleDragMove])
+
+  useEffect(() => {
+    return () => {
+      window.removeEventListener('mousemove', handleDragMove)
+      window.removeEventListener('mouseup', handleDragEnd)
+    }
+  }, [handleDragEnd, handleDragMove])
 
   return (
-    <div className="pl-5 pr-5 glass rounded-full font-sans flex-none w-[33.333vw] h-[5.5vh] max-w-[33.333vw] max-h-[5.5vh]">
-      <div className="flex items-center justify-between w-full h-full">
+    <div className={containerClass}>
+      <div className={layoutClass}>
         {/* Left - Chat button */}
-        <div className="flex items-center gap-2">
+        <div className={sectionClass}>
           <Button
             variant={chatActive ? 'secondary' : 'ghost'}
             size="sm"
@@ -84,7 +137,7 @@ export const Mainbar = () => {
         </div>
 
         {/* Middle - Hide */}
-        <div className="flex items-center gap-2">
+        <div className={sectionClass}>
           <Button variant="ghost" size="sm">
             <span>Hide</span>
             <Command />
@@ -93,7 +146,7 @@ export const Mainbar = () => {
         </div>
 
         {/* Recording indicator */}
-        <div className="flex items-center gap-2">
+        <div className={sectionClass}>
           <Button
             variant={isRecording ? 'destructive' : 'ghost'}
             size="sm"
@@ -107,20 +160,19 @@ export const Mainbar = () => {
           </Button>
         </div>
 
-        {/* Invisibility Toggle */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleInvisibilityToggle}
-            title={isInvisible ? 'Enable invisibility' : 'Disable invisibility'}
+        {/* Drag Handle (top/bottom snap) */}
+        <div className={sectionClass}>
+          <div
+            className="flex items-center gap-2 cursor-grab active:cursor-grabbing select-none"
+            onMouseDown={handleDragStart}
+            title={`Drag to dock ${dockPosition === 'top' ? 'bottom' : 'top'}`}
           >
-            {isInvisible ? <Eye /> : <EyeOff />}
-          </Button>
+            <GripHorizontal className="size-5 text-gray-800/70 hover:text-gray-900 transition-colors" />
+          </div>
         </div>
 
         {/* Quit button */}
-        <div className="flex items-center gap-2">
+        <div className={sectionClass}>
           <Button
             variant="ghost"
             size="sm"
