@@ -63,6 +63,7 @@ export function BriefPage({ brief, userRole, onBack }: BriefPageProps) {
         }
         
         const response = await api.generateBriefContent({
+          briefId: brief.id,
           name: brief.name,
           description: brief.description || '',
           role: userRole,
