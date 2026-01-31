@@ -12,7 +12,7 @@ langchain-google-genai==0.0.6
 
 # Auth
 pyjwt==2.8.0
-httpx==0.26.0
+httpx==0.25.2
 
 # Database
 supabase==2.3.4
