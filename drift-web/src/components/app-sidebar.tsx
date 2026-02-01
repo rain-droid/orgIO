@@ -8,6 +8,8 @@ import {
   LifeBuoy,
   Send,
   Zap,
+  Plug,
+  CheckCircle2,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -83,6 +85,16 @@ export function AppSidebar({
     onClick: () => onBriefSelect?.(brief),
   }))
 
+  // MCP Hub - Connected integrations
+  const mcpIntegrations = [
+    { name: 'Notion', connected: true, icon: '📝' },
+    { name: 'Slack', connected: true, icon: '💬' },
+    { name: 'Jira', connected: true, icon: '🎯' },
+    { name: 'GitHub', connected: true, icon: '🐙' },
+    { name: 'Linear', connected: false, icon: '📊' },
+    { name: 'Figma', connected: false, icon: '🎨' },
+  ]
+
   const navSecondary = [
     {
       title: "Support",
@@ -120,6 +132,33 @@ export function AppSidebar({
       <SidebarContent>
         <NavMain items={navMain} />
         {projects.length > 0 && <NavProjects projects={projects} />}
+        
+        {/* MCP Hub */}
+        <div className="px-3 py-2">
+          <div className="flex items-center gap-2 px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+            <Plug size={14} />
+            <span>MCP Hub</span>
+          </div>
+          <div className="space-y-1 mt-1">
+            {mcpIntegrations.map((integration) => (
+              <div 
+                key={integration.name}
+                className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-accent cursor-pointer text-sm"
+              >
+                <div className="flex items-center gap-2">
+                  <span>{integration.icon}</span>
+                  <span>{integration.name}</span>
+                </div>
+                {integration.connected ? (
+                  <CheckCircle2 size={14} className="text-emerald-500" />
+                ) : (
+                  <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Connect</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+        
         <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
