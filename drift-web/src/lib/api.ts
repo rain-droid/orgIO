@@ -324,10 +324,10 @@ class DriftAPI {
     return this.fetch<UserProfile>('/api/users/me')
   }
 
-  async updateUserRole(role: 'pm' | 'dev' | 'designer') {
+  async updateUserRole(role: 'pm' | 'dev' | 'designer', orgId?: string) {
     return this.fetch<UserProfile>('/api/users/me', {
       method: 'PATCH',
-      body: JSON.stringify({ role }),
+      body: JSON.stringify({ role, orgId }),
     })
   }
 

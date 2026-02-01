@@ -74,17 +74,32 @@ async def get_me(authorization: str = Header(None)):
 
 @router.patch("/users/me")
 async def update_me(update_data: Dict[str, Any], authorization: str = Header(...)):
-    """Update current user profile (role only for now)."""
+    """Update current user profile (role and/or orgId)."""
     user = await get_current_user(authorization)
     supabase = get_supabase()
 
+    updates = {}
+    
+    # Update role if provided
     role = update_data.get("role")
-    if role not in {"pm", "dev", "designer"}:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "VALIDATION_ERROR", "message": "Invalid role"}
-        )
-
-    supabase.table("users").update({"role": role}).eq("id", user["userId"]).execute()
-
+    if role:
+        if role not in {"pm", "dev", "designer"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"code": "VALIDATION_ERROR", "message": "Invalid role"}
+            )
+        updates["role"] = role
+    
+    # Update org_id if provided
+    org_id = update_data.get("orgId")
+    if org_id:
+        updates["org_id"] = org_id
+    
+    if updates:
+        supabase.table("users").update(updates).eq("id", user["userId"]).execute()
+    
+    # Return updated user - merge the org_id from request if token doesn't have it
+    if org_id:
+        user["orgId"] = org_id
+    
     return _upsert_user(user)
