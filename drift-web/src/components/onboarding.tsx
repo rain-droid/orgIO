@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useUser, useOrganizationList, useAuth } from '@clerk/clerk-react'
 import { FileText, Users, Code, Palette, Briefcase, ArrowRight, Check, Loader2 } from 'lucide-react'
 import type { Role } from '@/types'
@@ -12,10 +12,11 @@ type Step = 'welcome' | 'organization' | 'role'
 
 export function Onboarding({ onComplete }: OnboardingProps) {
   const { user } = useUser()
-  const { getToken } = useAuth()
+  const { getToken, orgId } = useAuth()
   const { createOrganization, setActive, userMemberships } = useOrganizationList({
     userMemberships: { infinite: true }
   })
+  const selectedOrgIdRef = useRef<string | null>(null)
   
   const [step, setStep] = useState<Step>('welcome')
   const [orgName, setOrgName] = useState('')
@@ -29,8 +30,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setError(null)
     try {
       const org = await createOrganization({ name: orgName })
+      selectedOrgIdRef.current = org.id
       await setActive?.({ organization: org.id })
-      await new Promise(r => setTimeout(r, 1000))
+      await new Promise(r => setTimeout(r, 500))
       setStep('role')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create organization')
@@ -39,10 +41,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     }
   }
 
-  const handleSelectExistingOrg = async (orgId: string) => {
+  const handleSelectExistingOrg = async (selectedOrgId: string) => {
     setLoading(true)
     try {
-      await setActive?.({ organization: orgId })
+      selectedOrgIdRef.current = selectedOrgId
+      await setActive?.({ organization: selectedOrgId })
+      await new Promise(r => setTimeout(r, 300))
       setStep('role')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to select organization')
@@ -58,10 +62,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setError(null)
     try {
       let token: string | null = null
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 3; i++) {
         token = await getToken({ skipCache: true })
         if (token) break
-        await new Promise(r => setTimeout(r, 500))
+        await new Promise(r => setTimeout(r, 300))
       }
       
       if (!token) {
@@ -69,8 +73,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       }
       
       api.setToken(token)
-      await api.getSession()
-      await api.updateUserRole(role)
+      
+      // Use org from ref (selected during this session) or from Clerk hook
+      const finalOrgId = selectedOrgIdRef.current || orgId
+      
+      // Save user with role AND org_id to database
+      await api.updateUserRole(role, finalOrgId || undefined)
+      
       onComplete()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save role')
