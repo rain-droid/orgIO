@@ -322,7 +322,53 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     }
   })
 
-  ipcMain.handle('session:end', async (_evt, _activities?: any[], summary?: string) => {
+  ipcMain.handle('session:end', async (_evt, _activities?: any[], _summary?: string) => {
+    if (!activeSessionId) {
+      return { error: 'No active session' }
+    }
+    
+    console.log('[Demo] Ending session with fake summary')
+    
+    // Stop activity tracking
+    activityTracker.stop()
+    
+    // DEMO MODE: Generate fake summary data
+    const demoActivitySummary = [
+      { app: 'Cursor', files: ['activityTracker.ts', 'router.ts', 'SessionActivity.tsx'], totalDuration: 420 },
+      { app: 'Firefox', files: ['GitHub - IntentPR'], totalDuration: 120 }
+    ]
+    
+    const demoNotes = [
+      { text: 'Refactored activity tracking module', timestamp: Date.now() - 300000 },
+      { text: 'Fixed TypeScript errors', timestamp: Date.now() - 180000 }
+    ]
+    
+    const demoData = {
+      sessionId: activeSessionId,
+      briefId: activeSessionBriefId,
+      briefName: activeSessionBriefName,
+      durationMinutes: 8,
+      summaryLines: [
+        'Refactored ActivityTracker component for better performance',
+        'Added TypeScript error handling across modules',
+        'Optimized screen capture logic for lower CPU usage'
+      ],
+      workspaceSummary: 'Good progress on the ActivityTracker refactoring. Implemented TypeScript error handling and optimized screen capture performance. Code quality improved significantly.',
+      attention: null // No issues!
+    }
+    
+    const briefId = activeSessionBriefId
+    const briefName = activeSessionBriefName
+    activeSessionId = null
+    activeSessionBriefId = null
+    activeSessionBriefName = null
+    
+    broadcast('session:ended', { ...demoData, activitySummary: demoActivitySummary, notes: demoNotes, briefId, briefName })
+    return { ...demoData, activitySummary: demoActivitySummary, notes: demoNotes, briefId, briefName }
+  })
+  
+  // Keep original error handling as separate handler for non-demo
+  ipcMain.handle('session:end-real', async (_evt, _activities?: any[], summary?: string) => {
     if (!activeSessionId) {
       return { error: 'No active session' }
     }

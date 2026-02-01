@@ -34,9 +34,8 @@ export function createAppWindow(isInvisible = false, t0: number): BrowserWindow 
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   mainWindow.setAlwaysOnTop(true, 'screen-saver', 1)
   
-  // Exclude this window from screen capture (like Cluely does)
-  // This makes the overlay invisible to screenshots/screen recording
-  mainWindow.setContentProtection(true)
+  // DEMO: Show widget on screenshots (set to true for stealth mode)
+  mainWindow.setContentProtection(false)
 
   // Re-focus when window loses focus to keep it on top
   mainWindow.on('blur', () => {
