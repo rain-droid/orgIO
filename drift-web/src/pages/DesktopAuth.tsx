@@ -64,7 +64,7 @@ export function DesktopAuth() {
         </div>
 
         <h1 className="text-3xl font-bold text-white mb-2">
-          Drift Desktop
+          Orgio Desktop
         </h1>
         
         {status === 'login' && (
@@ -83,7 +83,7 @@ export function DesktopAuth() {
         {status === 'redirecting' && (
           <>
             <p className="text-zinc-400 mb-8">
-              Connecting to Drift Desktop...
+              Connecting to Orgio Desktop...
             </p>
             <div className="flex items-center justify-center gap-3 text-indigo-400">
               <Loader2 className="w-6 h-6 animate-spin" />

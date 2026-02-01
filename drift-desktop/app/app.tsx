@@ -30,10 +30,10 @@ function LoginScreen() {
           <div className="login-card">
             <div className="login-logo">
               <div className="login-logo-mark">D</div>
-              <span>Drift</span>
+              <span>Orgio</span>
             </div>
 
-            <h1 className="login-title">Welcome to Drift</h1>
+            <h1 className="login-title">Welcome to Orgio</h1>
             <p className="login-subtitle">The ultimate AI sprint assistant</p>
 
             <button
@@ -53,7 +53,7 @@ function LoginScreen() {
         </div>
         <div className="login-right">
           <div className="login-preview">
-            <div className="login-preview-pill">Drift overlay</div>
+            <div className="login-preview-pill">Orgio overlay</div>
             <div className="login-preview-card">
               <div className="login-preview-header">What should I say next?</div>
               <div className="login-preview-body">

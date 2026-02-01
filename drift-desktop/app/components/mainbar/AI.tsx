@@ -346,7 +346,7 @@ export const AI: React.FC<AIProps> = ({ isChatPaneVisible, onContentChange }) =>
 
     if (isChatLoading && !answer) {
       return (
-        <div className="flex-1 p-4 glass rounded-lg animate-pulse">Loading from Drift AI...</div>
+        <div className="flex-1 p-4 glass rounded-lg animate-pulse">Loading from Orgio AI...</div>
       )
     }
 
@@ -360,7 +360,7 @@ export const AI: React.FC<AIProps> = ({ isChatPaneVisible, onContentChange }) =>
 
     return (
       <div className="flex-1 flex items-center justify-center p-4 glass rounded-lg text-gray-500">
-        Ask Drift anything...
+        Ask Orgio anything...
       </div>
     )
   }

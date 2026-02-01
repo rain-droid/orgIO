@@ -246,7 +246,7 @@ export default function App() {
               <div className="size-8 bg-foreground rounded flex items-center justify-center">
                 <Sparkles className="size-4 text-background" />
               </div>
-              <span className="font-semibold">Drift</span>
+              <span className="font-semibold">Orgio</span>
             </div>
             <SignInButton mode="modal">
               <button className="text-sm text-muted-foreground hover:text-foreground transition-colors">

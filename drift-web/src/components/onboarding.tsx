@@ -110,7 +110,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               </div>
             </div>
             <div>
-              <h1 className="text-2xl font-semibold mb-2">Welcome to Drift</h1>
+              <h1 className="text-2xl font-semibold mb-2">Welcome to Orgio</h1>
               <p className="text-muted-foreground">AI-powered sprint planning for modern teams</p>
             </div>
 

@@ -119,7 +119,7 @@ export function AppSidebar({
                   <span className="font-bold text-sm">D</span>
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">Drift</span>
+                  <span className="truncate font-semibold">Orgio</span>
                   <span className="truncate text-xs text-muted-foreground font-mono">
                     {userRole.toUpperCase()} View
                   </span>
