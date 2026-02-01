@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useAuth } from '@clerk/clerk-react'
 import { 
   Loader2, 
   Sparkles, 
@@ -46,6 +47,7 @@ const roleConfig = {
 }
 
 export function PlanningView({ projectName, onComplete, onCancel }: PlanningViewProps) {
+  const { orgId } = useAuth()
   const [phase, setPhase] = useState<'thinking' | 'planning' | 'ready'>('thinking')
   const [overview, setOverview] = useState('')
   const [plans, setPlans] = useState<RolePlan[]>([
@@ -232,6 +234,7 @@ export function PlanningView({ projectName, onComplete, onCancel }: PlanningView
       const newBrief = await api.createBrief({
         name: projectName,
         description: overview,
+        orgId: orgId || undefined,
       })
       onComplete(newBrief.id)
     } catch (err) {

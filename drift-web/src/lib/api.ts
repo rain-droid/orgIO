@@ -3,6 +3,7 @@ const API_URL = import.meta.env.VITE_API_URL || ''
 interface CreateBriefRequest {
   name: string
   description?: string
+  orgId?: string
 }
 
 interface SubmitWorkRequest {

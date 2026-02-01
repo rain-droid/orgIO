@@ -71,8 +71,8 @@ async def create_brief(
     user = await get_current_user(authorization)
     supabase = get_supabase()
     
-    # Get org_id - either from token or from users table
-    org_id = user.get("orgId")
+    # Get org_id - priority: request body > token > users table
+    org_id = brief_data.orgId or user.get("orgId")
     
     if not org_id:
         # Try to get org_id from users table

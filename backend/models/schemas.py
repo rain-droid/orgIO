@@ -112,6 +112,10 @@ class BriefCreate(BaseModel):
     """Create brief request"""
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(default="", max_length=5000)
+    orgId: Optional[str] = Field(default=None, alias="orgId")
+
+    class Config:
+        populate_by_name = True
 
 
 # ============================================
