@@ -4,6 +4,7 @@ import { AppSidebar } from '@/components/app-sidebar'
 import { Onboarding } from '@/components/onboarding'
 import { ProjectWorkspace } from '@/components/workspace/ProjectWorkspace'
 import { PlanningView } from '@/components/planning/PlanningView'
+import { ChatView } from '@/components/chat/ChatView'
 import { DesktopAuth } from '@/pages/DesktopAuth'
 import {
   SidebarInset,
@@ -27,7 +28,7 @@ import {
   TrendingUp,
 } from 'lucide-react'
 
-type View = 'home' | 'brief' | 'briefs' | 'reviews' | 'planning'
+type View = 'home' | 'brief' | 'briefs' | 'reviews' | 'planning' | 'chat'
 
 export default function App() {
   // Handle /auth/desktop route for desktop app authentication
@@ -614,6 +615,13 @@ export default function App() {
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* CHAT VIEW */}
+          {currentView === 'chat' && (
+            <div className="h-[calc(100vh-3.5rem)]">
+              <ChatView userRole={currentRole} />
             </div>
           )}
         </main>
