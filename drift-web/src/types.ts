@@ -6,7 +6,7 @@ export interface User {
   email: string
   name: string
   avatarUrl: string | null
-  role: Role
+  role: Role | null  // null until user completes onboarding
 }
 
 export interface Brief {

@@ -98,14 +98,17 @@ export default function App() {
           role: session.role,
         })
 
-        // Only show onboarding if user is truly new (first time ever)
-        if (session.isNew) {
+        // Show onboarding if:
+        // 1. User is new (first time ever)
+        // 2. User never completed role selection (role is null)
+        // Backend now sends needsOnboarding flag
+        if (session.needsOnboarding || session.isNew || !session.role) {
           setNeedsOnboarding(true)
           setCheckingUser(false)
           return
         }
         
-        // User exists - don't show onboarding
+        // User exists and has a role - don't show onboarding
         setNeedsOnboarding(false)
 
         const briefsResponse = await api.listBriefs()
@@ -301,8 +304,10 @@ export default function App() {
     )
   }
 
-  // Show onboarding only if explicitly needed AND user doesn't have a role yet
-  if (needsOnboarding && (!driftUser || !driftUser.role)) {
+  // Show onboarding if:
+  // 1. needsOnboarding flag is set, OR
+  // 2. User exists but has no role (null)
+  if (needsOnboarding || (driftUser && !driftUser.role)) {
     return <Onboarding onComplete={handleOnboardingComplete} />
   }
   

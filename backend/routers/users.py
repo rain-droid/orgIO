@@ -22,13 +22,17 @@ def _upsert_user(user: Dict[str, Any]) -> Dict[str, Any]:
 
     if existing.data:
         supabase.table("users").update(user_data).eq("id", user["userId"]).execute()
-        role = existing.data[0].get("role", "dev")
+        role = existing.data[0].get("role")  # Can be None if not set yet
         is_new = False
     else:
-        user_data["role"] = "dev"
+        # DON'T set default role - user must choose in onboarding
+        # role will be NULL until they complete onboarding
         supabase.table("users").insert(user_data).execute()
-        role = "dev"
+        role = None
         is_new = True
+
+    # Needs onboarding if new OR if role was never set
+    needs_onboarding = is_new or role is None
 
     return {
         "userId": user["userId"],
@@ -37,7 +41,8 @@ def _upsert_user(user: Dict[str, Any]) -> Dict[str, Any]:
         "name": user["name"],
         "role": role,
         "avatarUrl": user["avatarUrl"],
-        "isNew": is_new
+        "isNew": is_new,
+        "needsOnboarding": needs_onboarding
     }
 
 

@@ -26,9 +26,10 @@ interface UserProfile {
   orgId: string | null
   email: string | null
   name: string | null
-  role: 'pm' | 'dev' | 'designer'
+  role: 'pm' | 'dev' | 'designer' | null
   avatarUrl: string | null
   isNew?: boolean
+  needsOnboarding?: boolean
 }
 
 interface ViewContent {
