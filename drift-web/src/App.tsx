@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useUser, useAuth, SignInButton, UserButton } from '@clerk/clerk-react'
 import { AppSidebar } from '@/components/app-sidebar'
 import { Onboarding } from '@/components/onboarding'
-import { BriefPage } from '@/pages/BriefPage'
+import { ProjectWorkspace } from '@/components/workspace/ProjectWorkspace'
+import { AICopilot } from '@/components/ai/AICopilot'
 import { DesktopAuth } from '@/pages/DesktopAuth'
 import {
   SidebarInset,
@@ -25,7 +26,7 @@ import {
   LayoutGrid,
 } from 'lucide-react'
 
-type View = 'home' | 'brief' | 'reviews'
+type View = 'home' | 'brief' | 'briefs' | 'reviews'
 
 export default function App() {
   // Handle /auth/desktop route for desktop app authentication
@@ -313,7 +314,7 @@ export default function App() {
   // Brief Page - Full screen without sidebar
   if (currentView === 'brief' && selectedBrief) {
     return (
-      <BriefPage 
+      <ProjectWorkspace 
         brief={selectedBrief}
         userRole={currentRole}
         onBack={() => { setCurrentView('home'); setSelectedBrief(null); }}
@@ -502,6 +503,55 @@ export default function App() {
             </div>
           )}
 
+          {/* PROJECTS/BRIEFS VIEW */}
+          {currentView === 'briefs' && (
+            <div className="p-6 space-y-6 animate-fadeIn">
+              <div className="flex items-center justify-between mb-4">
+                <h1 className="text-2xl font-semibold">All Projects</h1>
+                <Button onClick={() => setCurrentView('home')} variant="outline" size="sm">
+                  <Sparkles className="size-4 mr-2" /> New Project
+                </Button>
+              </div>
+              <div className="grid gap-3">
+                {briefs.map(brief => (
+                  <div
+                    key={brief.id}
+                    className="group flex items-center gap-4 p-4 bg-card border border-border rounded-lg hover:border-primary/50 cursor-pointer transition-all"
+                    onClick={() => handleBriefSelect(brief)}
+                  >
+                    <div className={`size-3 rounded-full shrink-0 ${
+                      brief.status === 'active' ? 'bg-emerald-500' : 
+                      brief.status === 'completed' ? 'bg-blue-500' : 'bg-muted'
+                    }`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium">{brief.name}</div>
+                      <div className="text-sm text-muted-foreground">{brief.description || 'No description'}</div>
+                    </div>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      brief.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' :
+                      brief.status === 'completed' ? 'bg-blue-500/10 text-blue-400' : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {brief.status}
+                    </span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeleteConfirm(brief.id); }}
+                      className="opacity-0 group-hover:opacity-100 p-2 hover:bg-destructive/10 rounded transition-all"
+                    >
+                      <Trash2 className="size-4 text-muted-foreground hover:text-destructive" />
+                    </button>
+                  </div>
+                ))}
+                {briefs.length === 0 && (
+                  <div className="p-12 text-center border border-dashed border-border rounded-lg">
+                    <Sparkles className="size-8 mx-auto mb-3 text-muted-foreground" />
+                    <p className="text-muted-foreground mb-4">No projects yet</p>
+                    <Button onClick={() => setCurrentView('home')}>Create your first project</Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* REVIEWS VIEW */}
           {currentView === 'reviews' && (
             <div className="p-8 animate-fadeIn">
@@ -562,6 +612,9 @@ export default function App() {
           </div>
         )}
       </SidebarInset>
+
+      {/* AI Copilot - Floating Assistant */}
+      <AICopilot userRole={currentRole} />
     </SidebarProvider>
   )
 }

@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import uvicorn
 
-from routers import auth, briefs, submissions, users
+from routers import auth, briefs, submissions, users, chat, desktop
 from services.agent_manager import get_agent_manager
 from config.settings import settings
 
@@ -53,6 +53,8 @@ app.add_middleware(
         "https://*.drift.app",        # Subdomains
         "https://34.185.148.16",      # GCP Production
         "http://34.185.148.16",       # GCP Production (HTTP)
+        "https://test.usehavoc.com",  # Test domain
+        "https://usehavoc.com",       # Main domain
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -65,6 +67,8 @@ app.include_router(auth.router, prefix="/api", tags=["Authentication"])
 app.include_router(briefs.router, prefix="/api", tags=["Briefs"])
 app.include_router(submissions.router, prefix="/api", tags=["Submissions"])
 app.include_router(users.router, prefix="/api", tags=["Users"])
+app.include_router(chat.router, prefix="/api", tags=["AI Chat"])
+app.include_router(desktop.router, prefix="/api", tags=["Desktop Integration"])
 
 
 # Health check endpoint

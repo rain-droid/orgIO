@@ -306,3 +306,130 @@ async def get_submissions_for_brief(
         "limit": limit,
         "offset": offset
     }
+
+
+# =============================================================================
+# Streaming Brief Generation WebSocket
+# =============================================================================
+
+from fastapi import WebSocket, WebSocketDisconnect
+from langchain_openai import ChatOpenAI
+from config.settings import settings as app_settings
+import json
+
+@router.websocket("/briefs/generate/stream")
+async def stream_brief_generation(websocket: WebSocket):
+    """
+    WebSocket endpoint for streaming brief generation.
+    
+    Message format:
+    {
+        "type": "generate",
+        "name": "Project name",
+        "description": "Project description",
+        "role": "pm" | "dev" | "designer",
+        "token": "clerk_jwt_token"
+    }
+    """
+    await websocket.accept()
+    
+    try:
+        while True:
+            data = await websocket.receive_json()
+            
+            if data.get("type") != "generate":
+                await websocket.send_json({"type": "error", "message": "Unknown message type"})
+                continue
+            
+            # Authenticate
+            token = data.get("token", "").replace("Bearer ", "")
+            try:
+                user = await verify_clerk_token(token)
+            except Exception:
+                await websocket.send_json({"type": "error", "message": "Authentication failed"})
+                continue
+            
+            name = data.get("name", "")
+            description = data.get("description", "")
+            role = data.get("role", "dev")
+            
+            # Stream generation
+            await websocket.send_json({"type": "start", "phase": "tasks"})
+            
+            # Generate tasks with streaming
+            llm = ChatOpenAI(
+                model="gpt-4o",
+                temperature=0.7,
+                streaming=True,
+                api_key=app_settings.openai_api_key
+            )
+            
+            task_prompt = f"""Generate tasks for this project as a {role.upper()}:
+
+Project: {name}
+Description: {description}
+
+Return ONLY a JSON array of tasks with this structure:
+[
+  {{"title": "Task title", "description": "Description", "priority": "high|medium|low", "estimated_hours": 2}}
+]
+
+Generate 5-8 focused tasks appropriate for a {role}. Return ONLY valid JSON, no other text."""
+
+            full_response = ""
+            async for chunk in llm.astream([{"role": "user", "content": task_prompt}]):
+                if chunk.content:
+                    full_response += chunk.content
+                    await websocket.send_json({"type": "chunk", "phase": "tasks", "content": chunk.content})
+            
+            await websocket.send_json({"type": "end", "phase": "tasks"})
+            
+            # Parse tasks
+            try:
+                # Extract JSON from response
+                json_str = full_response
+                if "```json" in json_str:
+                    json_str = json_str.split("```json")[1].split("```")[0].strip()
+                elif "```" in json_str:
+                    json_str = json_str.split("```")[1].split("```")[0].strip()
+                
+                tasks = json.loads(json_str)
+            except:
+                tasks = []
+            
+            # Generate spec with streaming
+            await websocket.send_json({"type": "start", "phase": "spec"})
+            
+            spec_prompts = {
+                "pm": f"Create a concise Product Specification for '{name}': {description}. Include: Overview, User Stories (3-5), Timeline, Success Metrics. Use markdown.",
+                "dev": f"Create a concise Technical Specification for '{name}': {description}. Include: Architecture, API Design, Tech Stack, Security. Use markdown with code examples.",
+                "designer": f"Create a concise Design Specification for '{name}': {description}. Include: User Flow, Components, Design Tokens, Accessibility. Use markdown."
+            }
+            
+            spec_prompt = spec_prompts.get(role, spec_prompts["dev"])
+            
+            full_spec = ""
+            async for chunk in llm.astream([{"role": "user", "content": spec_prompt}]):
+                if chunk.content:
+                    full_spec += chunk.content
+                    await websocket.send_json({"type": "chunk", "phase": "spec", "content": chunk.content})
+            
+            await websocket.send_json({"type": "end", "phase": "spec"})
+            
+            # Send final result
+            await websocket.send_json({
+                "type": "complete",
+                "tasks": tasks,
+                "spec": full_spec,
+                "role": role,
+                "projectName": name
+            })
+    
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        print(f"Streaming generation error: {e}")
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except:
+            pass

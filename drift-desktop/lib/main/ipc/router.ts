@@ -15,8 +15,8 @@ const getStore = async () => {
   return store
 }
 
-// Drift Backend API URL
-const DRIFT_API_URL = 'https://34.185.148.16/api'
+// Drift Backend API URL - use test domain or fall back to IP
+const DRIFT_API_URL = process.env.DRIFT_API_URL || 'https://test.usehavoc.com/api'
 
 interface IpcContext {
   shortcutsHelper: ShortcutsHelper
@@ -227,6 +227,115 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   ipcMain.on('open-chat', () => {
     appState.dispatch('OPEN_CHAT')
+  })
+
+  /* ---------------- Session Management (connect to Drift backend) ---------------- */
+  let activeSessionId: string | null = null
+
+  ipcMain.handle('session:start', async (_evt, briefId: string, role: string) => {
+    const s = await getStore()
+    const authToken = s.get('authToken')
+    
+    if (!authToken) {
+      return { error: 'Not authenticated' }
+    }
+    
+    try {
+      const response = await fetch(`${DRIFT_API_URL}/desktop/session/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ briefId, role })
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Session start failed: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      activeSessionId = data.sessionId
+      broadcast('session:started', data)
+      return data
+    } catch (error) {
+      console.error('Session start error:', error)
+      return { error: String(error) }
+    }
+  })
+
+  ipcMain.handle('session:end', async (_evt, activities: any[], summary?: string) => {
+    if (!activeSessionId) {
+      return { error: 'No active session' }
+    }
+    
+    const s = await getStore()
+    const authToken = s.get('authToken')
+    
+    if (!authToken) {
+      return { error: 'Not authenticated' }
+    }
+    
+    try {
+      const response = await fetch(`${DRIFT_API_URL}/desktop/session/end`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          sessionId: activeSessionId,
+          activities,
+          summary
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Session end failed: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      activeSessionId = null
+      broadcast('session:ended', data)
+      return data
+    } catch (error) {
+      console.error('Session end error:', error)
+      return { error: String(error) }
+    }
+  })
+
+  ipcMain.handle('session:get-active', () => activeSessionId)
+
+  /* ---------------- Sync with Drift backend ---------------- */
+  ipcMain.handle('drift:sync', async () => {
+    const s = await getStore()
+    const authToken = s.get('authToken')
+    
+    if (!authToken) {
+      return { error: 'Not authenticated' }
+    }
+    
+    try {
+      const response = await fetch(`${DRIFT_API_URL}/desktop/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({})
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Sync failed: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      broadcast('drift:synced', data)
+      return data
+    } catch (error) {
+      console.error('Drift sync error:', error)
+      return { error: String(error) }
+    }
   })
 
   /* ---------------- toggle invisibility ---------------- */
