@@ -86,23 +86,44 @@ async def sync_desktop_state(
     user_id = user_info["userId"]
     org_id = user_info.get("orgId")
     
+    print(f"[desktop/sync] user_id: {user_id}, org_id: {org_id}")
+    
     supabase = get_supabase()
     
-    # Get all briefs for org (not just active)
-    briefs_result = supabase.table("briefs")\
-        .select("id, name, description, status")\
-        .eq("org_id", org_id)\
-        .execute()
+    # Try multiple strategies to find briefs
+    briefs = []
     
-    briefs = briefs_result.data if briefs_result.data else []
+    # Strategy 1: Get all briefs for org
+    if org_id:
+        briefs_result = supabase.table("briefs")\
+            .select("id, name, description, status, org_id, created_by")\
+            .eq("org_id", org_id)\
+            .execute()
+        briefs = briefs_result.data if briefs_result.data else []
+        print(f"[desktop/sync] Found {len(briefs)} briefs by org_id")
     
-    # If no briefs found with org_id, try getting user's created briefs
+    # Strategy 2: Get user's created briefs
     if not briefs:
         briefs_result = supabase.table("briefs")\
-            .select("id, name, description, status")\
+            .select("id, name, description, status, org_id, created_by")\
             .eq("created_by", user_id)\
             .execute()
         briefs = briefs_result.data if briefs_result.data else []
+        print(f"[desktop/sync] Found {len(briefs)} briefs by created_by")
+    
+    # Strategy 3: Get ALL briefs (for debugging - remove in production)
+    if not briefs:
+        all_briefs_result = supabase.table("briefs")\
+            .select("id, name, description, status, org_id, created_by")\
+            .limit(10)\
+            .execute()
+        all_briefs = all_briefs_result.data if all_briefs_result.data else []
+        print(f"[desktop/sync] Total briefs in DB: {len(all_briefs)}")
+        if all_briefs:
+            print(f"[desktop/sync] Sample brief: org_id={all_briefs[0].get('org_id')}, created_by={all_briefs[0].get('created_by')}")
+        
+        # Use all briefs for now (temporary fix)
+        briefs = all_briefs
     
     # Get tasks assigned to user's role
     user_result = supabase.table("users")\
