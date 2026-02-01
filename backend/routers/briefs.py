@@ -165,7 +165,17 @@ async def list_briefs(
     user = await get_current_user(authorization)
     supabase = get_supabase()
 
-    response = supabase.table("briefs").select("*").eq("org_id", user["orgId"]).order("created_at", desc=True).execute()
+    # Get org_id from token or fallback to users table
+    org_id = user.get("orgId")
+    if not org_id:
+        user_record = supabase.table("users").select("org_id").eq("id", user["userId"]).execute()
+        if user_record.data:
+            org_id = user_record.data[0].get("org_id")
+    
+    if not org_id:
+        return {"briefs": []}
+
+    response = supabase.table("briefs").select("*").eq("org_id", org_id).order("created_at", desc=True).execute()
     briefs = response.data or []
 
     return {"briefs": [_map_brief(brief, include_tasks=False) for brief in briefs]}
