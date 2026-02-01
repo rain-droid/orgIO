@@ -363,44 +363,54 @@ class ActivityTracker {
    * Get active window on Windows using PowerShell
    */
   private async getActiveWindowWindows(): Promise<{ app: string; title: string } | null> {
-    // Apps to ignore (our own app)
-    const IGNORE_APPS = ['electron', 'drift', 'drift-desktop']
-    
     try {
       const { execSync } = await import('child_process')
       
-      // Get all windows with titles, sorted by recent activity
-      try {
-        const result = execSync(
-          'powershell -NoProfile -Command "Get-Process | Where-Object {$_.MainWindowTitle -ne \'\'} | Sort-Object -Property @{Expression={$_.Responding};Descending=$true},@{Expression={$_.CPU};Descending=$true} | Select-Object -First 5 | ForEach-Object { $_.ProcessName + \'|\' + $_.MainWindowTitle }"',
-          { timeout: 2000, windowsHide: true, encoding: 'utf8' }
-        ).toString().trim()
+      // Use GetForegroundWindow to get the ACTUAL active window
+      const script = `
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public class WinAPI {
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
+}
+"@
+$hwnd = [WinAPI]::GetForegroundWindow()
+$title = New-Object Text.StringBuilder 256
+[void][WinAPI]::GetWindowText($hwnd, $title, 256)
+$pid = 0
+[void][WinAPI]::GetWindowThreadProcessId($hwnd, [ref]$pid)
+$proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+Write-Output "$($proc.ProcessName)|$($title.ToString())"
+`
+      
+      const result = execSync(
+        `powershell -NoProfile -ExecutionPolicy Bypass -Command "${script.replace(/\r?\n/g, ' ')}"`,
+        { timeout: 3000, windowsHide: true, encoding: 'utf8' }
+      ).toString().trim()
+      
+      if (result && result.includes('|')) {
+        const [app, title] = result.split('|')
+        const appLower = (app || '').toLowerCase()
         
-        // Parse all results and find first non-ignored app
-        const lines = result.split('\n').filter(l => l.includes('|'))
-        
-        for (const line of lines) {
-          const pipeIndex = line.indexOf('|')
-          const app = line.substring(0, pipeIndex).trim().toLowerCase()
-          const title = line.substring(pipeIndex + 1).trim()
-          
-          // Skip our own app
-          if (IGNORE_APPS.some(ignore => app.includes(ignore))) {
-            continue
-          }
-          
-          // Found a valid app!
-          const appName = line.substring(0, pipeIndex).trim()
-          console.log(`[ActivityTracker] Detected: ${appName} - ${title.substring(0, 50)}`)
-          return { app: appName, title }
+        // If it's our own app (Drift/Electron), return null - the overlay is focused
+        if (appLower === 'electron' || appLower.includes('drift')) {
+          // Don't track when user is interacting with overlay
+          return null
         }
-      } catch (e) {
-        console.log('[ActivityTracker] PowerShell failed:', e)
+        
+        if (app && app !== 'undefined' && app !== '') {
+          console.log(`[ActivityTracker] Active: ${app} - ${title.substring(0, 40)}`)
+          return { app, title: title || '' }
+        }
       }
       
       return null
     } catch (err) {
-      console.error('[ActivityTracker] Windows detection error:', err)
+      console.error('[ActivityTracker] Error:', err)
       return null
     }
   }
