@@ -278,71 +278,30 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         clearInterval(screenAnalysisInterval)
       }
       
-      const analyzeScreenPeriodic = async () => {
-        const store = await getStore()
-        const token = store.get('authToken')
-        
-        if (!token) {
-          console.log('[ScreenAnalysis] No auth token, skipping')
-          return
-        }
-        if (!activityTracker.getStatus().isTracking) {
-          console.log('[ScreenAnalysis] Not tracking, skipping')
-          return
-        }
-        
-        console.log('[ScreenAnalysis] Capturing screen...')
-        
-        try {
-          const primaryDisplay = screen.getPrimaryDisplay()
-          const sources = await desktopCapturer.getSources({
-            types: ['screen'],
-            thumbnailSize: { width: Math.floor(primaryDisplay.size.width / 3), height: Math.floor(primaryDisplay.size.height / 3) }
-          })
-          
-          if (sources.length === 0) return
-          
-          const screenshot = sources[0].thumbnail.toJPEG(50).toString('base64')
-          
-          const resp = await axios.post(`${DRIFT_API_URL}/desktop/session/analyze-screen`, {
-            screenshot,
-            projectName: currentProjectName,
-            previousInsights: previousInsights.slice(-10)
-          }, {
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            timeout: 15000
-          })
-          
-          const result = resp.data
-          
-          console.log('[ScreenAnalysis] Response:', result.skip ? 'SKIP' : result.bullets?.length + ' bullets')
-          
-          if (result.bullets && result.bullets.length > 0 && !result.skip) {
-            console.log('[ScreenAnalysis] Bullets:', result.bullets)
-            previousInsights.push(...result.bullets)
-            if (previousInsights.length > 20) previousInsights = previousInsights.slice(-20)
-            
-            broadcast('session:screen-insight', {
-              bullets: result.bullets,
-              timestamp: Date.now()
-            })
-          }
-        } catch (err: any) {
-          console.error('[ScreenAnalysis] Error:', err.message || err)
-          if (err.response) {
-            console.error('[ScreenAnalysis] Status:', err.response.status)
-          }
-        }
-      }
+      // Demo mode: 3 fixed insights at 3s, 6s, 9s
+      const demoInsights = [
+        'Refactoring ActivityTracker component',
+        'Adding TypeScript error handling',
+        'Optimizing screen capture logic'
+      ]
       
-      console.log('[Session] Screen analysis started, interval: 8s')
+      console.log('[Session] Demo mode: sending 3 insights')
       
-      // Analyze screen every 8 seconds
-      screenAnalysisInterval = setInterval(analyzeScreenPeriodic, 8000)
-      setTimeout(analyzeScreenPeriodic, 2000) // First analysis after 2s
+      // Send each insight with delay
+      setTimeout(() => {
+        console.log('[Demo] Insight 1')
+        broadcast('session:screen-insight', { bullets: [demoInsights[0]], timestamp: Date.now() })
+      }, 3000)
+      
+      setTimeout(() => {
+        console.log('[Demo] Insight 2')
+        broadcast('session:screen-insight', { bullets: [demoInsights[1]], timestamp: Date.now() })
+      }, 6000)
+      
+      setTimeout(() => {
+        console.log('[Demo] Insight 3')
+        broadcast('session:screen-insight', { bullets: [demoInsights[2]], timestamp: Date.now() })
+      }, 9000)
       
       broadcast('session:started', data)
       return data

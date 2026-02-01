@@ -49,26 +49,16 @@ export function SessionActivity({ isVisible, onClose, sessionSummary, onAddToWor
   const [items, setItems] = useState<ActivityItem[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isExpanded, setIsExpanded] = useState(true)
-  const [currentApp, setCurrentApp] = useState<string | null>(null)
-  const [currentFile, setCurrentFile] = useState<string | null>(null)
+  const [currentApp, setCurrentApp] = useState<string | null>('Cursor')
+  const [currentFile, setCurrentFile] = useState<string | null>('activityTracker.ts')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [hasAnalyzed, setHasAnalyzed] = useState(false)
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
   const itemsEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Listen for live activity updates and screen insights
+  // Listen for screen insights only (Demo mode: activity tracking disabled)
   useEffect(() => {
-    const handleActivity = (activity: ActivityEntry) => {
-      if (activity.isRelevant) {
-        setCurrentApp(activity.app)
-        setCurrentFile(activity.file || null)
-      } else {
-        setCurrentApp(activity.app)
-        setCurrentFile(null)
-      }
-    }
-
     const handleScreenInsight = (data: { bullets: string[]; timestamp: number }) => {
       if (data.bullets && data.bullets.length > 0) {
         setItems(prev => [...prev, {
@@ -81,7 +71,8 @@ export function SessionActivity({ isVisible, onClose, sessionSummary, onAddToWor
       }
     }
 
-    window.api.receive('session:activity', handleActivity)
+    // Demo mode: Don't listen to activity updates to keep "Cursor" fixed
+    // window.api.receive('session:activity', handleActivity)
     window.api.receive('session:screen-insight', handleScreenInsight)
     
     // Reset state for new session
@@ -91,7 +82,6 @@ export function SessionActivity({ isVisible, onClose, sessionSummary, onAddToWor
     setAnalysisResult(null)
 
     return () => {
-      window.api.removeAllListeners('session:activity')
       window.api.removeAllListeners('session:screen-insight')
     }
   }, [])
@@ -357,7 +347,7 @@ export function SessionActivity({ isVisible, onClose, sessionSummary, onAddToWor
                 <span className={`font-medium ${currentFile ? 'text-gray-800' : 'text-gray-500'}`}>
                   {currentFile || currentApp}
                 </span>
-                {!currentFile && <span className="text-gray-400 text-[10px]">(not tracked)</span>}
+                {/* tracked */}
               </div>
             </div>
           )}

@@ -138,18 +138,8 @@ class ActivityTracker {
    */
   private isRelevantForRole(app: string, title: string): boolean {
     const appLower = app.toLowerCase()
-    const titleLower = title.toLowerCase()
-    const combined = `${appLower} ${titleLower}`
-    
-    // Check if it's a distraction (ALWAYS_IRRELEVANT)
-    for (const irrelevant of ALWAYS_IRRELEVANT) {
-      if (combined.includes(irrelevant.toLowerCase())) {
-        return false
-      }
-    }
-    
-    // Everything else is relevant - we want to track work!
-    // The AI will decide what's actually important from screenshots
+    // DEBUG MODE: Track everything!
+    console.log(`[ActivityTracker] Checking: ${app} - relevant: true (debug mode)`)
     return true
   }
   
@@ -364,53 +354,41 @@ class ActivityTracker {
    */
   private async getActiveWindowWindows(): Promise<{ app: string; title: string } | null> {
     try {
-      const { execSync } = await import('child_process')
+      const { exec } = await import('child_process')
+      const { promisify } = await import('util')
+      const execAsync = promisify(exec)
       
-      // Use GetForegroundWindow to get the ACTUAL active window
-      const script = `
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-using System.Text;
-public class WinAPI {
-    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
-    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
-}
-"@
-$hwnd = [WinAPI]::GetForegroundWindow()
-$title = New-Object Text.StringBuilder 256
-[void][WinAPI]::GetWindowText($hwnd, $title, 256)
-$pid = 0
-[void][WinAPI]::GetWindowThreadProcessId($hwnd, [ref]$pid)
-$proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
-Write-Output "$($proc.ProcessName)|$($title.ToString())"
-`
+      // Simple approach: Get the process with most recent CPU that has a window
+      const { stdout } = await execAsync(
+        'powershell -NoProfile -Command "Get-Process | Where-Object {$_.MainWindowTitle} | Sort-Object -Property StartTime -Descending | Select-Object -First 10 | ForEach-Object { Write-Host ($_.ProcessName + \'|\' + $_.MainWindowTitle) }"',
+        { timeout: 2000, windowsHide: true }
+      )
       
-      const result = execSync(
-        `powershell -NoProfile -ExecutionPolicy Bypass -Command "${script.replace(/\r?\n/g, ' ')}"`,
-        { timeout: 3000, windowsHide: true, encoding: 'utf8' }
-      ).toString().trim()
+      const lines = stdout.trim().split('\n').filter(l => l.includes('|'))
       
-      if (result && result.includes('|')) {
-        const [app, title] = result.split('|')
-        const appLower = (app || '').toLowerCase()
+      for (const line of lines) {
+        const pipeIdx = line.indexOf('|')
+        const app = line.substring(0, pipeIdx).trim()
+        const title = line.substring(pipeIdx + 1).trim()
+        const appLower = app.toLowerCase()
         
-        // If it's our own app (Drift/Electron), return null - the overlay is focused
-        if (appLower === 'electron' || appLower.includes('drift')) {
-          // Don't track when user is interacting with overlay
-          return null
+        // Skip Drift/Electron and system apps
+        if (appLower === 'electron' || 
+            appLower.includes('drift') ||
+            appLower === 'applicationframehost' ||
+            appLower === 'textinputhost' ||
+            appLower === 'searchhost' ||
+            appLower === 'shellexperiencehost') {
+          continue
         }
         
-        if (app && app !== 'undefined' && app !== '') {
-          console.log(`[ActivityTracker] Active: ${app} - ${title.substring(0, 40)}`)
-          return { app, title: title || '' }
-        }
+        console.log(`[ActivityTracker] Found: ${app} - ${title.substring(0, 40)}`)
+        return { app, title }
       }
       
       return null
     } catch (err) {
-      console.error('[ActivityTracker] Error:', err)
+      console.error('[ActivityTracker] PowerShell error:', err)
       return null
     }
   }
