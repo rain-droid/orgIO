@@ -58,10 +58,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setLoading(true)
     setError(null)
     try {
-      // Wait for token - retry a few times if not immediately available
+      // Force fresh token with org context (skipCache ensures we get updated org_id)
       let token: string | null = null
       for (let i = 0; i < 5; i++) {
-        token = await getToken()
+        token = await getToken({ skipCache: true })
         if (token) break
         await new Promise(r => setTimeout(r, 500))
       }

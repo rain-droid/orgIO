@@ -57,10 +57,10 @@ export default function App() {
     const checkUser = async () => {
       setCheckingUser(true)
       try {
-        // Wait for token with retry
+        // Wait for fresh token with org context
         let token: string | null = null
         for (let i = 0; i < 5; i++) {
-          token = await getToken()
+          token = await getToken({ skipCache: true })
           if (token) break
           await new Promise(r => setTimeout(r, 500))
         }
@@ -128,10 +128,10 @@ export default function App() {
     setNeedsOnboarding(false)
     setCheckingUser(true)
     try {
-      // Wait for token with retry
+      // Wait for fresh token with org context
       let token: string | null = null
       for (let i = 0; i < 5; i++) {
-        token = await getToken()
+        token = await getToken({ skipCache: true })
         if (token) break
         await new Promise(r => setTimeout(r, 500))
       }
