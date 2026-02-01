@@ -165,7 +165,7 @@ async def sync_desktop_state(
     }
 
 
-  @router.post("/desktop/session/start")
+@router.post("/desktop/session/start")
 async def start_session(
     request: SessionStartRequest,
     authorization: str = Header(...)
