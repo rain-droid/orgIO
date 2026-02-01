@@ -269,14 +269,26 @@ async def get_brief_view(
     # Generate view with UI Agent
     try:
         ui_agent = agent_manager.get_agent("ui")
-        view_content = await ui_agent.generate_view_content(
-            brief=brief,
-            tasks=tasks,
-            role=role
+        
+        # Add timeout to prevent hanging
+        import asyncio
+        view_content = await asyncio.wait_for(
+            ui_agent.generate_view_content(
+                brief=brief,
+                tasks=tasks,
+                role=role
+            ),
+            timeout=45  # 45 seconds total timeout
         )
         
         return view_content
         
+    except asyncio.TimeoutError:
+        print(f"View generation timeout for role: {role}")
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail={"code": "TIMEOUT", "message": "Generation took too long. Please try again."}
+        )
     except Exception as e:
         print(f"View generation error: {e}")
         raise HTTPException(

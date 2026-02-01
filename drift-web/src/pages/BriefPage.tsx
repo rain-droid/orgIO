@@ -56,6 +56,12 @@ export function BriefPage({ brief, userRole, onBack }: BriefPageProps) {
       setIsGenerating(true)
       setError(null)
       
+      // Add timeout to prevent infinite loading
+      const timeoutId = setTimeout(() => {
+        setIsGenerating(false)
+        setError('Generation timed out. Please refresh the page to try again.')
+      }, 60000) // 60 seconds
+      
       try {
         const token = await getToken()
         if (token) {
@@ -69,8 +75,10 @@ export function BriefPage({ brief, userRole, onBack }: BriefPageProps) {
           role: userRole,
         })
         
+        clearTimeout(timeoutId)
         setContent(response.content as GeneratedContent)
       } catch (err) {
+        clearTimeout(timeoutId)
         console.error('Failed to generate content:', err)
         setError('Failed to generate content. Please try again.')
       } finally {

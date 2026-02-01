@@ -22,7 +22,12 @@ class BaseAgent(ABC):
             model: LLM model name (default: gpt-4o)
             temperature: LLM temperature for creativity (default: 0.7)
         """
-        self.llm = ChatOpenAI(model=model, temperature=temperature)
+        self.llm = ChatOpenAI(
+            model=model, 
+            temperature=temperature,
+            request_timeout=30,  # 30 seconds timeout
+            max_retries=2
+        )
         self.memory: Optional[Any] = None
         self.tools: List[Any] = []
     
