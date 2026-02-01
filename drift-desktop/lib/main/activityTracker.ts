@@ -382,27 +382,29 @@ class ActivityTracker {
    */
   private async getActiveWindow(): Promise<{ app: string; title: string } | null> {
     try {
-      // Dynamic import to handle optional dependency
-      const activeWin = await import('active-win').then(m => m.default || m).catch(() => null)
-      
-      if (activeWin) {
-        const window = await activeWin()
-        if (window) {
-          return {
-            app: window.owner?.name || 'Unknown',
-            title: window.title || ''
-          }
-        }
-      }
-      
-      // Fallback: try using PowerShell on Windows
+      // Use platform-specific method directly (more reliable)
       if (process.platform === 'win32') {
         return await this.getActiveWindowWindows()
       }
       
-      // Fallback: try using AppleScript on macOS
       if (process.platform === 'darwin') {
         return await this.getActiveWindowMac()
+      }
+      
+      // Linux/other: try active-win
+      try {
+        const activeWin = await import('active-win').then(m => m.default || m)
+        if (activeWin) {
+          const window = await activeWin()
+          if (window) {
+            return {
+              app: window.owner?.name || 'Unknown',
+              title: window.title || ''
+            }
+          }
+        }
+      } catch {
+        // active-win not available
       }
       
       return null
@@ -418,40 +420,50 @@ class ActivityTracker {
     try {
       const { execSync } = await import('child_process')
       
-      // Simple and reliable: get process with active window
-      const script = `
-$code = @'
-using System;
-using System.Runtime.InteropServices;
-using System.Text;
-public class WinAPI {
-  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
-  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
-}
-'@
-Add-Type -TypeDefinition $code -Language CSharp
-$h = [WinAPI]::GetForegroundWindow()
-$t = New-Object Text.StringBuilder 512
-[void][WinAPI]::GetWindowText($h, $t, 512)
-$pid = 0
-[void][WinAPI]::GetWindowThreadProcessId($h, [ref]$pid)
-$p = Get-Process -Id $pid -EA 0
-"$($p.ProcessName)|$($t.ToString())"
-`
-      const result = execSync(`powershell -NoProfile -Command "${script.replace(/\r?\n/g, ' ').replace(/"/g, '\\"')}"`, {
-        timeout: 2000,
-        windowsHide: true,
-        encoding: 'utf8'
-      })
-      
-      const [app, title] = result.trim().split('|')
-      if (app && app !== '') {
-        return { app, title: title || '' }
+      // Method 1: Get foreground window directly via user32.dll
+      try {
+        const script = `Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;using System.Text;public class W{[DllImport("user32.dll")]public static extern IntPtr GetForegroundWindow();[DllImport("user32.dll")]public static extern int GetWindowText(IntPtr h,StringBuilder s,int n);[DllImport("user32.dll")]public static extern uint GetWindowThreadProcessId(IntPtr h,out uint p);}' -Language CSharp;$h=[W]::GetForegroundWindow();$t=New-Object Text.StringBuilder 256;[void][W]::GetWindowText($h,$t,256);$i=0;[void][W]::GetWindowThreadProcessId($h,[ref]$i);$n=(Get-Process -Id $i -EA 0).ProcessName;Write-Output "$n|$($t.ToString())"`
+        
+        const result = execSync(`powershell -NoProfile -ExecutionPolicy Bypass -Command "${script}"`, {
+          timeout: 2000,
+          windowsHide: true,
+          encoding: 'utf8'
+        }).toString().trim()
+        
+        if (result && result.includes('|')) {
+          const pipeIndex = result.indexOf('|')
+          const app = result.substring(0, pipeIndex).trim()
+          const title = result.substring(pipeIndex + 1).trim()
+          
+          if (app && app !== '' && app !== 'undefined') {
+            console.log(`[ActivityTracker] Detected: ${app} - ${title.substring(0, 50)}`)
+            return { app, title }
+          }
+        }
+      } catch (e) {
+        console.log('[ActivityTracker] Method 1 failed, trying fallback')
       }
+      
+      // Method 2: Simple fallback - get most active process
+      try {
+        const result = execSync(
+          'powershell -NoProfile -Command "(Get-Process | Where-Object {$_.MainWindowTitle -ne \'\'} | Sort-Object CPU -Descending | Select-Object -First 1 | ForEach-Object { $_.ProcessName + \'|\' + $_.MainWindowTitle })"',
+          { timeout: 1500, windowsHide: true, encoding: 'utf8' }
+        ).toString().trim()
+        
+        if (result && result.includes('|')) {
+          const [app, title] = result.split('|')
+          if (app) {
+            return { app, title: title || '' }
+          }
+        }
+      } catch {
+        // Final fallback failed
+      }
+      
       return null
     } catch (err) {
-      console.error('[ActivityTracker] Windows detection failed:', err)
+      console.error('[ActivityTracker] Windows detection error:', err)
       return null
     }
   }
