@@ -399,3 +399,117 @@ Format as structured markdown."""
         "spec": response.content,
         "project_name": name
     }
+
+
+# =============================================================================
+# Planning WebSocket - Cursor-style planning interface
+# =============================================================================
+
+@router.websocket("/planning/stream")
+async def planning_stream(websocket: WebSocket):
+    """
+    WebSocket endpoint for streaming project planning.
+    
+    Message format:
+    {
+        "type": "plan",
+        "projectName": "Project name",
+        "token": "Bearer clerk_jwt_token"
+    }
+    
+    Response stream:
+    - {"type": "overview", "content": "Project overview text"}
+    - {"type": "role_start", "role": "pm|dev|designer"}
+    - {"type": "chunk", "content": "streaming text..."}
+    - {"type": "role_tasks", "role": "pm", "tasks": [...]}
+    - {"type": "complete"}
+    """
+    await websocket.accept()
+    
+    try:
+        while True:
+            data = await websocket.receive_json()
+            
+            if data.get("type") != "plan":
+                await websocket.send_json({"type": "error", "message": "Unknown message type"})
+                continue
+            
+            # Authenticate
+            token = data.get("token", "").replace("Bearer ", "")
+            try:
+                await verify_clerk_token(token)
+            except Exception:
+                await websocket.send_json({"type": "error", "message": "Authentication failed"})
+                continue
+            
+            project_name = data.get("projectName", "Unnamed Project")
+            
+            llm = ChatOpenAI(
+                model="gpt-4o",
+                temperature=0.7,
+                streaming=True,
+                api_key=settings.OPENAI_API_KEY
+            )
+            
+            # Generate overview
+            overview_prompt = f"""In one sentence, describe what this project is about and its main goal:
+Project: {project_name}
+Be concise and clear."""
+            
+            overview = ""
+            async for chunk in llm.astream([{"role": "user", "content": overview_prompt}]):
+                if chunk.content:
+                    overview += chunk.content
+            
+            await websocket.send_json({"type": "overview", "content": overview})
+            
+            # Generate tasks for each role
+            roles = ["pm", "dev", "designer"]
+            role_labels = {"pm": "Product Manager", "dev": "Developer", "designer": "Designer"}
+            
+            for role in roles:
+                await websocket.send_json({"type": "role_start", "role": role})
+                
+                task_prompt = f"""Generate actionable tasks for a {role_labels[role]} for this project:
+Project: {project_name}
+
+Return ONLY a JSON array (no other text) with this structure:
+[
+  {{"title": "Task title", "description": "Brief description", "priority": "high|medium|low", "estimated_hours": 2}}
+]
+
+Generate 4-6 focused, specific tasks appropriate for a {role_labels[role]}. Return ONLY valid JSON array."""
+
+                full_response = ""
+                async for chunk in llm.astream([{"role": "user", "content": task_prompt}]):
+                    if chunk.content:
+                        full_response += chunk.content
+                        await websocket.send_json({"type": "chunk", "content": chunk.content})
+                
+                # Parse tasks
+                try:
+                    json_str = full_response
+                    if "```json" in json_str:
+                        json_str = json_str.split("```json")[1].split("```")[0].strip()
+                    elif "```" in json_str:
+                        json_str = json_str.split("```")[1].split("```")[0].strip()
+                    
+                    tasks = json.loads(json_str)
+                except:
+                    tasks = []
+                
+                await websocket.send_json({"type": "role_tasks", "role": role, "tasks": tasks})
+                
+                # Small delay between roles for UX
+                await asyncio.sleep(0.3)
+            
+            await websocket.send_json({"type": "complete"})
+    
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        print(f"Planning WebSocket error: {e}")
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except:
+            pass

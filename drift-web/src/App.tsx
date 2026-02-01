@@ -3,6 +3,7 @@ import { useUser, useAuth, SignInButton, UserButton } from '@clerk/clerk-react'
 import { AppSidebar } from '@/components/app-sidebar'
 import { Onboarding } from '@/components/onboarding'
 import { ProjectWorkspace } from '@/components/workspace/ProjectWorkspace'
+import { PlanningView } from '@/components/planning/PlanningView'
 import { AICopilot } from '@/components/ai/AICopilot'
 import { DesktopAuth } from '@/pages/DesktopAuth'
 import {
@@ -26,7 +27,7 @@ import {
   LayoutGrid,
 } from 'lucide-react'
 
-type View = 'home' | 'brief' | 'briefs' | 'reviews'
+type View = 'home' | 'brief' | 'briefs' | 'reviews' | 'planning'
 
 export default function App() {
   // Handle /auth/desktop route for desktop app authentication
@@ -47,6 +48,7 @@ export default function App() {
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [checkingUser, setCheckingUser] = useState(true)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [planningProjectName, setPlanningProjectName] = useState('')
 
   const currentRole: Role = driftUser?.role || 'dev'
 
@@ -194,30 +196,46 @@ export default function App() {
     }
   }
 
-  const handleCreateBrief = async () => {
+  const handleStartPlanning = () => {
     if (!inputValue.trim() || !orgId || !clerkUser) return
-    setLoading(true)
+    setPlanningProjectName(inputValue.trim())
+    setInputValue('')
+    setCurrentView('planning')
+  }
+
+  const handlePlanningComplete = async (projectId: string) => {
+    // Refresh briefs list
     try {
-      const newBrief = await api.createBrief({
-        name: inputValue,
-        description: '',
-      })
-      const mappedBrief: Brief = {
-        id: newBrief.id,
-        orgId: newBrief.orgId,
-        name: newBrief.name,
-        description: newBrief.description,
-        status: newBrief.status as Brief['status'],
-        createdBy: newBrief.createdBy,
+      const briefsResponse = await api.listBriefs()
+      const briefsData = briefsResponse.briefs.map((brief) => ({
+        id: brief.id,
+        orgId: brief.orgId,
+        name: brief.name,
+        description: brief.description,
+        status: brief.status as Brief['status'],
+        createdBy: brief.createdBy,
         content: null,
+      }))
+      setBriefs(briefsData)
+      
+      // Find and select the new brief
+      const newBrief = briefsData.find(b => b.id === projectId)
+      if (newBrief) {
+        setSelectedBrief(newBrief)
+        setCurrentView('brief')
+      } else {
+        setCurrentView('home')
       }
-      setBriefs([mappedBrief, ...briefs])
-      setSelectedBrief(mappedBrief)
-      setInputValue('')
-      setCurrentView('brief')
-    } finally {
-      setLoading(false)
+    } catch (err) {
+      console.error('Failed to refresh briefs:', err)
+      setCurrentView('home')
     }
+    setPlanningProjectName('')
+  }
+
+  const handlePlanningCancel = () => {
+    setPlanningProjectName('')
+    setCurrentView('home')
   }
 
   const handleDeleteBrief = async (briefId: string) => {
@@ -316,6 +334,18 @@ export default function App() {
     return <Onboarding onComplete={handleOnboardingComplete} />
   }
 
+  // Planning View - Full screen Cursor-style planning
+  if (currentView === 'planning' && planningProjectName) {
+    return (
+      <PlanningView
+        projectName={planningProjectName}
+        userRole={currentRole}
+        onComplete={handlePlanningComplete}
+        onCancel={handlePlanningCancel}
+      />
+    )
+  }
+
   // Brief Page - Full screen without sidebar
   if (currentView === 'brief' && selectedBrief) {
     return (
@@ -363,7 +393,7 @@ export default function App() {
                   placeholder="Plan a new project for Drift to handle..."
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleCreateBrief()}
+                  onKeyDown={(e) => e.key === 'Enter' && handleStartPlanning()}
                   className="w-full bg-transparent text-base placeholder:text-muted-foreground/50 focus:outline-none"
                 />
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/50">
@@ -374,12 +404,12 @@ export default function App() {
                     </span>
                   </div>
                   <Button
-                    onClick={handleCreateBrief}
+                    onClick={handleStartPlanning}
                     disabled={!inputValue.trim() || loading}
                     size="sm"
                     className="h-8"
                   >
-                    {loading ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
+                    {loading ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
                   </Button>
                 </div>
               </div>

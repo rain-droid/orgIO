@@ -55,6 +55,10 @@ class DriftAPI {
     this.token = token
   }
 
+  getStoredToken(): string | null {
+    return this.token
+  }
+
   private async fetch<T>(path: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -323,6 +327,32 @@ class DriftAPI {
     return this.fetch<UserProfile>('/api/users/me', {
       method: 'PATCH',
       body: JSON.stringify({ role }),
+    })
+  }
+
+  // Generate tasks for planning view
+  async generateTasks(projectName: string, role: 'pm' | 'dev' | 'designer') {
+    return this.fetch<{
+      tasks: Array<{
+        title: string
+        description: string
+        priority: 'high' | 'medium' | 'low'
+        estimated_hours?: number
+      }>
+    }>('/api/generate/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ name: projectName, role }),
+    })
+  }
+
+  // Generate spec content
+  async generateSpec(projectName: string, role: 'pm' | 'dev' | 'designer') {
+    return this.fetch<{
+      spec: string
+      role: string
+    }>('/api/generate/spec', {
+      method: 'POST',
+      body: JSON.stringify({ name: projectName, role }),
     })
   }
 }
