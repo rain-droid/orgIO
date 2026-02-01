@@ -35,7 +35,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   }
   briefs?: Brief[]
   onBriefSelect?: (brief: Brief) => void
-  onViewChange?: (view: 'home' | 'briefs' | 'reviews') => void
+  onViewChange?: (view: 'home' | 'briefs' | 'reviews' | 'mcp-hub') => void
   currentView?: string
   userRole?: Role
 }
@@ -75,6 +75,13 @@ export function AppSidebar({
       icon: Inbox,
       isActive: currentView === 'reviews',
       onClick: () => onViewChange?.('reviews'),
+    },
+    {
+      title: "MCP Hub",
+      url: "#",
+      icon: Zap,
+      isActive: currentView === 'mcp-hub',
+      onClick: () => onViewChange?.('mcp-hub'),
     },
   ]
 

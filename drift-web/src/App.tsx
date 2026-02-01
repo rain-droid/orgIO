@@ -6,6 +6,7 @@ import { ProjectWorkspace } from '@/components/workspace/ProjectWorkspace'
 import { PlanningView } from '@/components/planning/PlanningView'
 import { ChatView } from '@/components/chat/ChatView'
 import { DesktopAuth } from '@/pages/DesktopAuth'
+import { MCPHub } from '@/pages/MCPHub'
 import {
   SidebarInset,
   SidebarProvider,
@@ -28,7 +29,7 @@ import {
   TrendingUp,
 } from 'lucide-react'
 
-type View = 'home' | 'brief' | 'briefs' | 'reviews' | 'planning' | 'chat'
+type View = 'home' | 'brief' | 'briefs' | 'reviews' | 'planning' | 'chat' | 'mcp-hub'
 
 export default function App() {
   // Handle /auth/desktop route for desktop app authentication
@@ -623,6 +624,11 @@ export default function App() {
             <div className="h-[calc(100vh-3.5rem)]">
               <ChatView userRole={currentRole} />
             </div>
+          )}
+
+          {/* MCP HUB VIEW */}
+          {currentView === 'mcp-hub' && (
+            <MCPHub />
           )}
         </main>
 
