@@ -2,6 +2,7 @@ import { BrowserWindow, ipcMain, screen, desktopCapturer, shell } from 'electron
 import { appState } from '@/lib/state/AppStateMachine'
 import { ShortcutsHelper } from '@/lib/main/shortcuts'
 import { windowRegistry } from '@/lib/main/windowRegistry'
+import { activityTracker } from '@/lib/main/activityTracker'
 import { createServer, Server } from 'http'
 import { parse } from 'url'
 
@@ -251,11 +252,20 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       })
       
       if (!response.ok) {
-        throw new Error(`Session start failed: ${response.status}`)
+        const errorText = await response.text()
+        throw new Error(`Session start failed: ${response.status} - ${errorText}`)
       }
       
       const data = await response.json()
       activeSessionId = data.sessionId
+      
+      // Start activity tracking with live updates
+      activityTracker.start(role, (activity) => {
+        // Broadcast live activity updates to renderer
+        broadcast('session:activity', activity)
+      })
+      console.log('[Session] Started tracking activities for role:', role)
+      
       broadcast('session:started', data)
       return data
     } catch (error) {
@@ -264,7 +274,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     }
   })
 
-  ipcMain.handle('session:end', async (_evt, activities: any[], summary?: string) => {
+  ipcMain.handle('session:end', async (_evt, _activities?: any[], summary?: string) => {
     if (!activeSessionId) {
       return { error: 'No active session' }
     }
@@ -277,6 +287,45 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     }
     
     try {
+      // Stop activity tracking and get results
+      const { activities, summary: activitySummary, notes } = activityTracker.stop()
+      console.log('[Session] Stopped tracking, got', activities.length, 'relevant activities,', notes.length, 'notes')
+      
+      // Generate summary from activities + notes
+      let generatedSummary = summary
+      if (!generatedSummary) {
+        const summaryParts: string[] = []
+        
+        // Add activity summary
+        for (const item of activitySummary.slice(0, 3)) {
+          const mins = Math.floor(item.totalDuration / 60)
+          if (mins > 0) {
+            if (item.files.length > 0) {
+              summaryParts.push(`${item.app}: ${item.files.slice(0, 3).join(', ')} (${mins}m)`)
+            } else {
+              summaryParts.push(`${item.app} (${mins}m)`)
+            }
+          }
+        }
+        
+        // Add manual notes
+        if (notes.length > 0) {
+          summaryParts.push('Notes: ' + notes.map(n => n.text).join(', '))
+        }
+        
+        generatedSummary = summaryParts.join(' | ')
+      }
+      
+      // Convert to API format (include screenshots for relevant activities)
+      const apiActivities = activities.map(a => ({
+        app: a.app,
+        title: a.title,
+        file: a.file,
+        duration: a.duration,
+        timestamp: a.timestamp,
+        screenshot: a.screenshot // Include screenshot if captured
+      }))
+      
       const response = await fetch(`${DRIFT_API_URL}/desktop/session/end`, {
         method: 'POST',
         headers: {
@@ -285,19 +334,21 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         },
         body: JSON.stringify({
           sessionId: activeSessionId,
-          activities,
-          summary
+          activities: apiActivities,
+          notes: notes.map(n => n.text),
+          summary: generatedSummary
         })
       })
       
       if (!response.ok) {
-        throw new Error(`Session end failed: ${response.status}`)
+        const errorText = await response.text()
+        throw new Error(`Session end failed: ${response.status} - ${errorText}`)
       }
       
       const data = await response.json()
       activeSessionId = null
-      broadcast('session:ended', data)
-      return data
+      broadcast('session:ended', { ...data, activitySummary, notes })
+      return { ...data, activitySummary, notes }
     } catch (error) {
       console.error('Session end error:', error)
       return { error: String(error) }
@@ -305,6 +356,19 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   })
 
   ipcMain.handle('session:get-active', () => activeSessionId)
+  
+  ipcMain.handle('session:get-activities', () => {
+    return activityTracker.getActivities()
+  })
+  
+  ipcMain.handle('session:add-note', (_evt, text: string) => {
+    activityTracker.addNote(text)
+    return { ok: true }
+  })
+  
+  ipcMain.handle('session:get-status', () => {
+    return activityTracker.getStatus()
+  })
 
   /* ---------------- Sync with Drift backend ---------------- */
   ipcMain.handle('drift:sync', async () => {

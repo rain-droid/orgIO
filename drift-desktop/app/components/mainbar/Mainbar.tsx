@@ -1,9 +1,10 @@
-import { Command, CornerDownLeft, Space, GripVertical, LogOut, ChevronDown, FileText, Mic, Settings, Power, RefreshCw } from 'lucide-react'
+import { Command, CornerDownLeft, Space, GripVertical, LogOut, ChevronDown, FileText, Mic, Settings, Power, RefreshCw, Activity } from 'lucide-react'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '../ui/button'
 import { useUIActor } from '../../state/UIStateProvider'
 import { useSelector } from '@xstate/react'
+import { SessionChat } from './SessionChat'
 
 type ShortcutAction = 'toggleOverlay' | 'submitChat' | 'toggleSession' | 'toggleVoice' | 'escape'
 type ShortcutConfig = Record<ShortcutAction, string>
@@ -104,9 +105,14 @@ export const Mainbar = () => {
   const [editingShortcut, setEditingShortcut] = useState<ShortcutAction | null>(null)
   const [shortcutError, setShortcutError] = useState<string | null>(null)
   const [isVoiceActive, setIsVoiceActive] = useState(false)
+  const [currentActivity, setCurrentActivity] = useState<string | null>(null)
+  const [showSessionChat, setShowSessionChat] = useState(false)
+  const [sessionChatPosition, setSessionChatPosition] = useState({ top: 0, left: 0 })
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const activityPollRef = useRef<NodeJS.Timeout | null>(null)
   const activitiesRef = useRef<Array<{ app: string; title: string; duration: number; timestamp: number }>>([])
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const sessionChatButtonRef = useRef<HTMLButtonElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
   const settingsButtonRef = useRef<HTMLButtonElement>(null)
@@ -160,6 +166,17 @@ export const Mainbar = () => {
       })
     }
   }, [showExitMenu])
+  
+  // Update session chat position
+  useEffect(() => {
+    if (showSessionChat && sessionChatButtonRef.current) {
+      const rect = sessionChatButtonRef.current.getBoundingClientRect()
+      setSessionChatPosition({
+        top: rect.bottom + 8,
+        left: Math.max(8, rect.left - 150) // Center it roughly
+      })
+    }
+  }, [showSessionChat])
 
   // Close menus on outside click
   useEffect(() => {
@@ -311,18 +328,42 @@ export const Mainbar = () => {
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [editingShortcut])
 
-  // Recording timer
+  // Recording timer & activity updates
   useEffect(() => {
     if (isRecording) {
       setRecordingTime(0)
       recordingIntervalRef.current = setInterval(() => {
         setRecordingTime((prevTime) => prevTime + 1)
       }, 1000)
+      
+      // Listen for live activity updates from main process
+      const handleActivity = (activity: { app: string; file?: string; title?: string; isRelevant: boolean }) => {
+        if (activity.isRelevant) {
+          if (activity.file) {
+            setCurrentActivity(`${activity.app}: ${activity.file}`)
+          } else if (activity.title) {
+            const title = activity.title.length > 40 ? activity.title.slice(0, 37) + '...' : activity.title
+            setCurrentActivity(`${activity.app}: ${title}`)
+          } else {
+            setCurrentActivity(activity.app)
+          }
+        } else {
+          setCurrentActivity(`${activity.app} (not tracked)`)
+        }
+      }
+      
+      window.api.receive('session:activity', handleActivity)
+      
+      return () => {
+        window.api.removeAllListeners('session:activity')
+      }
     } else {
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current)
       }
       setRecordingTime(0)
+      setCurrentActivity(null)
+      setShowSessionChat(false)
     }
     return () => {
       if (recordingIntervalRef.current) {
@@ -572,7 +613,23 @@ export const Mainbar = () => {
           </Button>
           
           {isRecording && (
-            <span className="text-xs font-mono tabular-nums text-red-500 ml-1">{formatTime(recordingTime)}</span>
+            <>
+              <span className="text-xs font-mono tabular-nums text-red-500 ml-1">{formatTime(recordingTime)}</span>
+              {currentActivity && (
+                <span className="text-[10px] text-gray-500 ml-2 truncate max-w-[150px]" title={currentActivity}>
+                  {currentActivity}
+                </span>
+              )}
+              <Button
+                ref={sessionChatButtonRef}
+                variant={showSessionChat ? 'secondary' : 'ghost'}
+                size="xs"
+                onClick={() => setShowSessionChat(!showSessionChat)}
+                title="Session Activity & Notes"
+              >
+                <Activity size={12} />
+              </Button>
+            </>
           )}
 
           {/* Project Selector */}
@@ -673,6 +730,24 @@ export const Mainbar = () => {
           )}
         </div>
       </div>
+      
+      {/* Session Chat Portal */}
+      {showSessionChat && isRecording && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            top: sessionChatPosition.top,
+            left: sessionChatPosition.left,
+            zIndex: 9999
+          }}
+        >
+          <SessionChat 
+            isVisible={true} 
+            onClose={() => setShowSessionChat(false)} 
+          />
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
