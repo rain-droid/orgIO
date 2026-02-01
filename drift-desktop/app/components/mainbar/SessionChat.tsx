@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, FileCode, Clock, Eye, EyeOff, ChevronDown, ChevronUp, Sparkles, CheckCircle, Upload, X, Bot, Loader2, Trash2 } from 'lucide-react'
+import { Send, FileCode, Clock, Eye, EyeOff, ChevronDown, ChevronUp, Sparkles, CheckCircle, Upload, X, Bot, Loader2, Trash2, AlertTriangle, ListChecks, Plus, ExternalLink } from 'lucide-react'
 import { Button } from '../ui/button'
 
 interface ActivityEntry {
@@ -13,7 +13,7 @@ interface ActivityEntry {
 }
 
 interface SessionMessage {
-  type: 'activity' | 'note' | 'system' | 'summary' | 'ai_insight' | 'auto_bullet'
+  type: 'activity' | 'note' | 'system' | 'summary' | 'ai_insight' | 'auto_bullet' | 'analysis'
   content: string
   timestamp: number
   app?: string
@@ -21,6 +21,7 @@ interface SessionMessage {
   screenshot?: string
   isRelevant?: boolean
   summaryData?: SessionSummaryData
+  analysisData?: AnalysisResult
   id?: string // For deletion
   bullets?: string[] // For auto_bullet type
 }
@@ -28,10 +29,20 @@ interface SessionMessage {
 interface SessionSummaryData {
   sessionId: string
   submissionId?: string
+  briefId?: string
+  briefName?: string
   durationMinutes: number
   summaryLines: string[]
   activitySummary?: Array<{ app: string; totalDuration: number; files: string[] }>
   notes?: Array<{ text: string; timestamp: number }>
+}
+
+// Analysis result from backend
+interface AnalysisResult {
+  updatedTasks: Array<{ taskId?: string; title: string; status: string; wasUpdated?: boolean; reason?: string }>
+  newTasks: Array<{ title: string; description?: string; priority?: string; reason?: string }>
+  issues: string[]
+  aiSummary: string
 }
 
 interface SessionChatProps {
@@ -48,6 +59,8 @@ export function SessionChat({ isVisible, onClose, sessionSummary, onAddToWorkspa
   const [showScreenshots, setShowScreenshots] = useState(false)
   const [lastActivity, setLastActivity] = useState<ActivityEntry | null>(null)
   const [isLoadingInsight, setIsLoadingInsight] = useState(false)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [hasAnalyzed, setHasAnalyzed] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const activityCountRef = useRef(0)
@@ -137,6 +150,10 @@ export function SessionChat({ isVisible, onClose, sessionSummary, onAddToWorkspa
     window.api.receive('session:activity', handleActivity)
     window.api.receive('session:screen-insight', handleScreenInsight)
     
+    // Reset analysis state for new session
+    setHasAnalyzed(false)
+    setIsAnalyzing(false)
+    
     // Add initial system message
     setMessages([{
       type: 'system',
@@ -187,6 +204,56 @@ export function SessionChat({ isVisible, onClose, sessionSummary, onAddToWorkspa
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Handle analyze session and add to workspace
+  const handleAnalyzeSession = async (summary: SessionSummaryData) => {
+    if (isAnalyzing || hasAnalyzed) return
+    
+    setIsAnalyzing(true)
+    
+    try {
+      const result = await window.api.invoke('session:analyze', {
+        sessionId: summary.sessionId,
+        submissionId: summary.submissionId,
+        briefId: summary.briefId,
+        activities: summary.activitySummary,
+        notes: summary.notes,
+        summaryLines: summary.summaryLines,
+        durationMinutes: summary.durationMinutes
+      })
+      
+      if (result && !result.error) {
+        setHasAnalyzed(true)
+        
+        // Add analysis result as message
+        setMessages(prev => [...prev, {
+          type: 'analysis',
+          content: 'Workspace aktualisiert',
+          timestamp: Date.now(),
+          analysisData: result as AnalysisResult
+        }])
+        
+        // Call the original callback if provided (optional - to open web app)
+        // onAddToWorkspace?.(summary)
+      } else {
+        // Show error
+        setMessages(prev => [...prev, {
+          type: 'system',
+          content: `❌ Analyse fehlgeschlagen: ${result?.error || 'Unbekannter Fehler'}`,
+          timestamp: Date.now()
+        }])
+      }
+    } catch (error) {
+      console.error('Analysis failed:', error)
+      setMessages(prev => [...prev, {
+        type: 'system',
+        content: `❌ Analyse fehlgeschlagen: ${String(error)}`,
+        timestamp: Date.now()
+      }])
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
 
   // Handle sending notes
   const handleSend = async () => {
@@ -406,13 +473,107 @@ export function SessionChat({ isVisible, onClose, sessionSummary, onAddToWorkspa
                     )}
                     
                     {/* Add to Workspace Button */}
+                    {onAddToWorkspace && !hasAnalyzed && (
+                      <button
+                        onClick={() => handleAnalyzeSession(msg.summaryData!)}
+                        disabled={isAnalyzing}
+                        className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white rounded-lg transition-colors font-medium"
+                      >
+                        {isAnalyzing ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" />
+                            Analysiere Workspace...
+                          </>
+                        ) : (
+                          <>
+                            <Upload size={14} />
+                            Add to Workspace
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                )}
+{msg.type === 'analysis' && msg.analysisData && (
+                  <div className="space-y-3 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg p-3 border border-indigo-200">
+                    <div className="flex items-center gap-2">
+                      <ListChecks size={14} className="text-indigo-600" />
+                      <span className="font-semibold text-indigo-800">Workspace Update</span>
+                    </div>
+                    
+                    {/* AI Summary */}
+                    {msg.analysisData.aiSummary && (
+                      <div className="text-indigo-700 italic text-[11px] border-l-2 border-indigo-300 pl-2">
+                        {msg.analysisData.aiSummary}
+                      </div>
+                    )}
+                    
+                    {/* Issues - HIGHLIGHTED */}
+                    {msg.analysisData.issues.length > 0 && (
+                      <div className="bg-red-100 border border-red-300 rounded-lg p-2 space-y-1">
+                        <div className="flex items-center gap-1.5 text-red-700 font-medium">
+                          <AlertTriangle size={12} />
+                          <span className="text-[10px] uppercase tracking-wide">Achtung!</span>
+                        </div>
+                        {msg.analysisData.issues.map((issue, idx) => (
+                          <div key={idx} className="text-red-800 text-[11px] flex items-start gap-1.5">
+                            <span className="text-red-500 mt-0.5">⚠</span>
+                            <span>{issue}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Updated Tasks */}
+                    {msg.analysisData.updatedTasks.length > 0 && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase tracking-wide text-emerald-600 font-medium flex items-center gap-1">
+                          <CheckCircle size={10} />
+                          Tasks aktualisiert
+                        </div>
+                        {msg.analysisData.updatedTasks.map((task, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-[11px]">
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                              task.status === 'done' ? 'bg-emerald-200 text-emerald-800' : 'bg-amber-200 text-amber-800'
+                            }`}>
+                              {task.status === 'done' ? '✓ DONE' : '→ IN PROGRESS'}
+                            </span>
+                            <span className="text-gray-800 truncate">{task.title}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* New Tasks */}
+                    {msg.analysisData.newTasks.length > 0 && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase tracking-wide text-blue-600 font-medium flex items-center gap-1">
+                          <Plus size={10} />
+                          Neue Tasks erkannt
+                        </div>
+                        {msg.analysisData.newTasks.map((task, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-[11px]">
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                              task.priority === 'high' ? 'bg-red-200 text-red-800' : 
+                              task.priority === 'medium' ? 'bg-amber-200 text-amber-800' : 
+                              'bg-gray-200 text-gray-800'
+                            }`}>
+                              {task.priority?.toUpperCase() || 'MEDIUM'}
+                            </span>
+                            <span className="text-gray-800 truncate">{task.title}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Open in Web Button */}
                     {onAddToWorkspace && (
                       <button
-                        onClick={() => onAddToWorkspace(msg.summaryData!)}
-                        className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors font-medium"
+                        onClick={() => onAddToWorkspace(sessionSummary!)}
+                        className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors text-[11px] font-medium"
                       >
-                        <Upload size={14} />
-                        Add to Workspace
+                        <ExternalLink size={12} />
+                        Im Browser öffnen
                       </button>
                     )}
                   </div>

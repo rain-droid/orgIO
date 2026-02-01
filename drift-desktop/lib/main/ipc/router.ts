@@ -456,10 +456,6 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       return { error: String(error.message || error), briefId, briefName }
     }
   })
-      console.error('Session end error:', error)
-      return { error: String(error) }
-    }
-  })
 
   ipcMain.handle('session:get-active', () => activeSessionId)
   

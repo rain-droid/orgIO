@@ -22,6 +22,8 @@ interface Project {
 interface SessionSummary {
   sessionId: string
   submissionId?: string
+  briefId?: string
+  briefName?: string
   durationMinutes: number
   summaryLines: string[]
   activitySummary?: Array<{ app: string; totalDuration: number; files: string[] }>
@@ -539,6 +541,8 @@ export const Mainbar = () => {
           setSessionSummary({
             sessionId: result.sessionId,
             submissionId: result.submissionId,
+            briefId: result.briefId,
+            briefName: result.briefName,
             durationMinutes: result.durationMinutes,
             summaryLines: result.summaryLines || [],
             activitySummary: result.activitySummary,
@@ -609,6 +613,8 @@ export const Mainbar = () => {
         setSessionSummary({
           sessionId: result.sessionId,
           submissionId: result.submissionId,
+          briefId: result.briefId,
+          briefName: result.briefName,
           durationMinutes: result.durationMinutes,
           summaryLines: result.summaryLines || [],
           activitySummary: result.activitySummary,
