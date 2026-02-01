@@ -10,6 +10,7 @@ from services.clerk_auth import verify_clerk_token
 from services.supabase_client import get_supabase
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
+from langchain_core.messages import HumanMessage, SystemMessage
 from config.settings import settings
 
 router = APIRouter()
@@ -301,7 +302,7 @@ Return a JSON object with this structure:
 Generate 5-10 actionable tasks appropriate for a {role}."""
 
     llm = ChatOpenAI(model="gpt-4o", temperature=0.7, api_key=settings.OPENAI_API_KEY)
-    response = await llm.ainvoke([{"role": "user", "content": prompt}])
+    response = await llm.ainvoke([HumanMessage(content=prompt)])
     
     # Parse JSON
     content = response.content
@@ -392,7 +393,7 @@ Format as structured markdown."""
     prompt = prompts.get(role, prompts["dev"])
     
     llm = ChatOpenAI(model="gpt-4o", temperature=0.7, api_key=settings.OPENAI_API_KEY)
-    response = await llm.ainvoke([{"role": "user", "content": prompt}])
+    response = await llm.ainvoke([HumanMessage(content=prompt)])
     
     return {
         "role": role,
@@ -457,7 +458,7 @@ Project: {project_name}
 Be concise and clear."""
             
             overview = ""
-            async for chunk in llm.astream([{"role": "user", "content": overview_prompt}]):
+            async for chunk in llm.astream([HumanMessage(content=overview_prompt)]):
                 if chunk.content:
                     overview += chunk.content
             
@@ -481,7 +482,7 @@ Return ONLY a JSON array (no other text) with this structure:
 Generate 4-6 focused, specific tasks appropriate for a {role_labels[role]}. Return ONLY valid JSON array."""
 
                 full_response = ""
-                async for chunk in llm.astream([{"role": "user", "content": task_prompt}]):
+                async for chunk in llm.astream([HumanMessage(content=task_prompt)]):
                     if chunk.content:
                         full_response += chunk.content
                         await websocket.send_json({"type": "chunk", "content": chunk.content})
