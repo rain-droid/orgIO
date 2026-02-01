@@ -158,14 +158,21 @@ async def get_brief(
 async def list_briefs(
     authorization: str = Header(...),
 ):
-    """List briefs for the current user"""
+    """List briefs for the current user's organization"""
     user = await get_current_user(authorization)
     supabase = get_supabase()
 
-    # Simple: just get briefs created by this user
-    response = supabase.table("briefs").select("*").eq("created_by", user["userId"]).order("created_at", desc=True).execute()
+    # Get org_id from users table (set by webhook)
+    user_record = supabase.table("users").select("org_id").eq("id", user["userId"]).execute()
+    org_id = user_record.data[0].get("org_id") if user_record.data else None
+    
+    if not org_id:
+        # Fallback: show user's own briefs
+        response = supabase.table("briefs").select("*").eq("created_by", user["userId"]).order("created_at", desc=True).execute()
+    else:
+        response = supabase.table("briefs").select("*").eq("org_id", org_id).order("created_at", desc=True).execute()
+    
     briefs = response.data or []
-
     return {"briefs": [_map_brief(brief, include_tasks=False) for brief in briefs]}
 
 

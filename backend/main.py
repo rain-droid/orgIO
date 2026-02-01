@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import uvicorn
 
-from routers import auth, briefs, submissions, users, chat, desktop
+from routers import auth, briefs, submissions, users, chat, desktop, webhooks
 from services.agent_manager import get_agent_manager
 from config.settings import settings
 
@@ -69,6 +69,7 @@ app.include_router(submissions.router, prefix="/api", tags=["Submissions"])
 app.include_router(users.router, prefix="/api", tags=["Users"])
 app.include_router(chat.router, prefix="/api", tags=["AI Chat"])
 app.include_router(desktop.router, prefix="/api", tags=["Desktop Integration"])
+app.include_router(webhooks.router, prefix="/api", tags=["Webhooks"])
 
 
 # Health check endpoint
