@@ -10,21 +10,34 @@ router = APIRouter()
 def _upsert_user(user: Dict[str, Any]) -> Dict[str, Any]:
     supabase = get_supabase()
 
-    user_data = {
-        "id": user["userId"],
-        "org_id": user["orgId"],
-        "email": user["email"],
-        "name": user["name"],
-        "avatar_url": user["avatarUrl"]
-    }
-
     existing = supabase.table("users").select("*").eq("id", user["userId"]).execute()
 
     if existing.data:
+        existing_record = existing.data[0]
+        # Only update org_id if we have a new one (don't overwrite with null)
+        org_id = user["orgId"] or existing_record.get("org_id")
+        
+        user_data = {
+            "email": user["email"],
+            "name": user["name"],
+            "avatar_url": user["avatarUrl"]
+        }
+        # Only update org_id if it's not null
+        if user["orgId"]:
+            user_data["org_id"] = user["orgId"]
+            
         supabase.table("users").update(user_data).eq("id", user["userId"]).execute()
-        role = existing.data[0].get("role")  # Can be None if not set yet
+        role = existing_record.get("role")  # Can be None if not set yet
         is_new = False
     else:
+        org_id = user["orgId"]
+        user_data = {
+            "id": user["userId"],
+            "org_id": org_id,
+            "email": user["email"],
+            "name": user["name"],
+            "avatar_url": user["avatarUrl"]
+        }
         # DON'T set default role - user must choose in onboarding
         # role will be NULL until they complete onboarding
         supabase.table("users").insert(user_data).execute()
@@ -36,7 +49,7 @@ def _upsert_user(user: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "userId": user["userId"],
-        "orgId": user["orgId"],
+        "orgId": org_id,
         "email": user["email"],
         "name": user["name"],
         "role": role,

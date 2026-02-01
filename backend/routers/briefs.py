@@ -71,9 +71,23 @@ async def create_brief(
     user = await get_current_user(authorization)
     supabase = get_supabase()
     
+    # Get org_id - either from token or from users table
+    org_id = user.get("orgId")
+    
+    if not org_id:
+        # Try to get org_id from users table
+        user_record = supabase.table("users").select("org_id").eq("id", user["userId"]).execute()
+        if user_record.data and user_record.data[0].get("org_id"):
+            org_id = user_record.data[0]["org_id"]
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"code": "NO_ORG", "message": "No organization selected. Please select or create an organization first."}
+            )
+    
     # Create brief
     brief_insert = {
-        "org_id": user["orgId"],
+        "org_id": org_id,
         "name": brief_data.name,
         "description": brief_data.description,
         "status": "planning",
