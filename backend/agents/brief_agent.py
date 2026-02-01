@@ -1,6 +1,6 @@
 from agents.base_agent import BaseAgent
 from langchain.prompts import ChatPromptTemplate
-from langchain.output_parsers import JsonOutputParser
+from langchain_core.output_parsers import JsonOutputParser
 from prompts.brief_prompts import BRIEF_TASK_GENERATION_PROMPT
 from typing import Dict, List, Any
 import json
