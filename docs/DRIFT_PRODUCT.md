@@ -1,4 +1,4 @@
-# DRIFT - Product & Pitch
+# Orgio - Product Overview
 
 ## One-Liner
 **AI-powered Sprint Planning mit personalisierten Views + automatisches Work Tracking durch Desktop Recording.**
@@ -95,53 +95,6 @@ REPEAT.
 
 ---
 
-## Demo Script (3 Min)
-
-**0:00 - Problem**
-> "Teams fragen AI separat, tracken manuell, vergessen Updates."
-
-**0:30 - Brief erstellen**
-> "Sarah erstellt Brief: Apple Pay Checkout"
-
-**1:00 - Generative UI**
-> "Jetzt der Magic Moment - gleicher Brief, andere Rolle..."
-> *Wechsel zu Dev View*
-> "Komplett andere Visualisierung. AI wählt die Components."
-
-**1:30 - Desktop Recording**
-> "Max arbeitet. Desktop App läuft im Background."
-> *Zeige Tray Icon, Recording Status*
-
-**2:00 - Session Summary**
-> "Session beenden. AI generiert Summary."
-> *Zeige Summary, Edit-Möglichkeit*
-> "Add to Workspace - wie ein PR für Arbeit."
-
-**2:30 - Team Review**
-> "Sarah sieht die Submission, approved..."
-> *Zeige Checklists updaten*
-> "Progress updated automatisch."
-
-**2:50 - Close**
-> "Von Brief bis Done. Ohne Meetings. Ohne manuelles Tracking."
-
----
-
-## Pitch (30 Sekunden)
-
-> "Teams fragen AI 4x separat, tracken Progress manuell, vergessen Jira Updates.
-> 
-> Drift: Ein Brief, jeder sieht seine personalisierte View - PM sieht Kanban, Dev sieht Code, Designer sieht Specs.
-> 
-> Desktop App recorded im Background was ihr macht.
-> Session beenden, AI generiert Summary, submit wie ein PR.
-> Team approved, Checklists updaten automatisch.
-> 
-> Von Brief bis Done - ohne Meetings, ohne manuelles Tracking."
-
-
----
-
 ## Warum das funktioniert
 
 | Heute | Mit Drift |
@@ -165,60 +118,22 @@ REPEAT.
 
 ---
 
-## Judge Q&A Prep
+## Roadmap
 
-**"Was ist der Unterschied zu ChatGPT?"**
-> "ChatGPT gibt Text. Drift gibt jedem seine personalisierte visuelle Darstellung - PM sieht Kanban, Dev sieht Architecture Diagrams. Plus: automatisches Work Tracking durch Desktop Recording."
+### Phase 1: Core Platform ✓
+- Brief creation with AI task generation
+- Generative UI Views (PM, Dev, Designer)
+- Desktop work tracking
+- Submission Review Flow
 
-**"Wie funktioniert das Recording?"**
-> "Desktop App läuft im Background, macht Screenshots, OCR erkennt Text, AI summarized. User kontrolliert was geteilt wird - wie ein PR, nicht automatisch."
+### Phase 2: Deep Integrations
+- GitHub PRs auto-detected
+- Figma exports tracked
+- Slack discussions summarized
+- Jira sync
 
-**"Privacy Concerns?"**
-> "Alles lokal verarbeitet. User sieht Summary, kann editieren, entscheidet was submitted wird. Nichts geht raus ohne Approval."
-
-**"Warum nicht einfach Jira + ChatGPT?"**
-> "Weil niemand Jira updated. Drift macht es automatisch durch die Submissions. Und ChatGPT gibt jedem die gleiche Antwort - Drift personalisiert."
-
-**"Wie skaliert das?"**
-> "Clerk Organizations für Teams. Supabase für Data. Generative UI skaliert weil AI die Components wählt, nicht wir sie hardcoden."
-
-**"Was ist die Generative UI?"**
-> "Vercel AI SDK. AI entscheidet welche React Components gerendert werden basierend auf Rolle. Nicht vorgefertigte Templates - AI generiert die View."
-
----
-
-## Hackathon Scope
-
-**Must Have (Demo):**
-- [ ] Brief erstellen
-- [ ] Generative UI Views (PM, Dev, Designer)
-- [ ] Submission Review Flow
-- [ ] Progress Updates
-
-**Nice to Have:**
-- [ ] Desktop Recording (kann simuliert werden)
-- [ ] Real-time WebSocket Updates
-
-**Post-Hackathon:**
-- [ ] Full Desktop App
-- [ ] Integrations (Slack, GitHub)
-- [ ] Analytics Dashboard
-
----
-
-## Future Vision
-
-```
-Phase 1: Sprint Planning (Hackathon)
-→ Briefs, Generative UI, Submissions
-
-Phase 2: Deep Integrations
-→ GitHub PRs auto-detected
-→ Figma exports tracked
-→ Slack discussions summarized
-
-Phase 3: AI Sprint Master
-→ AI schlägt nächste Tasks vor
-→ Bottleneck Detection
-→ Automatic Re-prioritization
-```
+### Phase 3: AI Sprint Master
+- AI suggests next tasks
+- Bottleneck detection
+- Automatic re-prioritization
+- Team analytics

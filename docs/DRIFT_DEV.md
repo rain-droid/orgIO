@@ -260,21 +260,3 @@ drift-desktop/
     └── SessionSummary.tsx
 ```
 
----
-
-## Hackathon Scope
-
-**Day 1:**
-- [ ] Clerk + Org setup
-- [ ] Brief CRUD
-- [ ] Basic Generative UI (2-3 components per role)
-
-**Day 2:**
-- [ ] Full role-based views
-- [ ] Submission review UI
-- [ ] Polish + Demo
-
-**Post-Hackathon:**
-- [ ] Desktop app
-- [ ] Real recording
-- [ ] Full component library
