@@ -56,6 +56,13 @@ class SessionAnalyzeRequest(BaseModel):
     durationMinutes: int
 
 
+class LiveInsightRequest(BaseModel):
+    """Request for live AI insight during session."""
+    activities: List[Dict[str, Any]]
+    notes: Optional[List[str]] = None
+    totalDuration: Optional[int] = None  # seconds
+
+
 @router.post("/desktop/sync")
 async def sync_desktop_state(
     request: DesktopSyncRequest,
@@ -72,14 +79,21 @@ async def sync_desktop_state(
     
     supabase = get_supabase()
     
-    # Get active briefs for org
+    # Get all briefs for org (not just active)
     briefs_result = supabase.table("briefs")\
         .select("id, name, description, status")\
         .eq("org_id", org_id)\
-        .eq("status", "active")\
         .execute()
     
     briefs = briefs_result.data if briefs_result.data else []
+    
+    # If no briefs found with org_id, try getting user's created briefs
+    if not briefs:
+        briefs_result = supabase.table("briefs")\
+            .select("id, name, description, status")\
+            .eq("created_by", user_id)\
+            .execute()
+        briefs = briefs_result.data if briefs_result.data else []
     
     # Get tasks assigned to user's role
     user_result = supabase.table("users")\
@@ -316,6 +330,78 @@ async def end_session(
         "durationMinutes": duration_minutes,
         "summaryLines": summary_lines
     }
+
+
+@router.post("/desktop/session/live-insight")
+async def get_live_insight(
+    request: LiveInsightRequest,
+    authorization: str = Header(...)
+):
+    """
+    Generate a live AI insight about current work session.
+    This is called periodically during a session to provide real-time feedback.
+    """
+    token = authorization.replace("Bearer ", "")
+    await verify_clerk_token(token)
+    
+    if not request.activities:
+        return {"insight": None}
+    
+    # Build activity context
+    activity_text = ""
+    for act in request.activities[-5:]:  # Last 5 activities
+        app = act.get("app", "Unknown")
+        file = act.get("file", "")
+        duration = act.get("duration", 0)
+        if file:
+            activity_text += f"- {app}: {file} ({duration}s)\n"
+        else:
+            activity_text += f"- {app} ({duration}s)\n"
+    
+    notes_text = ""
+    if request.notes:
+        notes_text = "User notes: " + ", ".join(request.notes[-3:])
+    
+    total_min = (request.totalDuration or 0) // 60
+    
+    # Quick AI insight prompt
+    prompt = f"""Du bist ein intelligenter Arbeits-Assistent. Analysiere diese aktuelle Arbeitsaktivität und gib ein kurzes, hilfreiches Update (1-2 Sätze auf Deutsch).
+
+AKTIVITÄTEN (letzte Minuten):
+{activity_text}
+{notes_text}
+Gesamtzeit: ~{total_min} Minuten
+
+REGELN:
+- Sei kurz und konkret (max 2 Sätze)
+- Erwähne was gerade gemacht wird
+- Gib einen hilfreichen Tipp oder Observation
+- Schreib auf Deutsch
+- Kein JSON, nur natürlicher Text
+
+Beispiele:
+- "Du arbeitest gerade an der API-Integration. Vergiss nicht die Error-Handler zu testen."
+- "Gute Fortschritte bei den UI-Komponenten! Schon 3 Files bearbeitet."
+- "Viel Zeit in der Doku - vielleicht Zeit für den nächsten Code-Sprint?"
+
+Dein Insight:"""
+
+    try:
+        llm = ChatOpenAI(
+            model="gpt-4o-mini",  # Faster model for live insights
+            temperature=0.7,
+            max_tokens=100,
+            api_key=settings.OPENAI_API_KEY
+        )
+        
+        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        insight = response.content.strip()
+        
+        return {"insight": insight}
+        
+    except Exception as e:
+        print(f"Live insight error: {e}")
+        return {"insight": None, "error": str(e)}
 
 
 @router.post("/desktop/session/analyze")

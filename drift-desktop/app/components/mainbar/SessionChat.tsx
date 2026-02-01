@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import { Send, FileCode, Clock, Eye, EyeOff, ChevronDown, ChevronUp, Sparkles, CheckCircle, Upload, X } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Send, FileCode, Clock, Eye, EyeOff, ChevronDown, ChevronUp, Sparkles, CheckCircle, Upload, X, Bot, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '../ui/button'
 
 interface ActivityEntry {
@@ -13,7 +13,7 @@ interface ActivityEntry {
 }
 
 interface SessionMessage {
-  type: 'activity' | 'note' | 'system' | 'summary'
+  type: 'activity' | 'note' | 'system' | 'summary' | 'ai_insight'
   content: string
   timestamp: number
   app?: string
@@ -21,6 +21,7 @@ interface SessionMessage {
   screenshot?: string
   isRelevant?: boolean
   summaryData?: SessionSummaryData
+  id?: string // For deletion
 }
 
 interface SessionSummaryData {
@@ -45,8 +46,40 @@ export function SessionChat({ isVisible, onClose, sessionSummary, onAddToWorkspa
   const [isExpanded, setIsExpanded] = useState(true)
   const [showScreenshots, setShowScreenshots] = useState(false)
   const [lastActivity, setLastActivity] = useState<ActivityEntry | null>(null)
+  const [isLoadingInsight, setIsLoadingInsight] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const activityCountRef = useRef(0)
+  const lastInsightTimeRef = useRef(0)
+
+  // Generate AI insight based on recent activities
+  const generateAIInsight = useCallback(async () => {
+    if (isLoadingInsight) return
+    
+    // Don't generate too frequently (min 30 seconds apart)
+    const now = Date.now()
+    if (now - lastInsightTimeRef.current < 30000) return
+    
+    setIsLoadingInsight(true)
+    lastInsightTimeRef.current = now
+    
+    try {
+      const result = await window.api.invoke('session:get-live-insight')
+      
+      if (result && result.insight && !result.error) {
+        setMessages(prev => [...prev, {
+          type: 'ai_insight',
+          content: result.insight,
+          timestamp: Date.now(),
+          id: `insight-${Date.now()}`
+        }])
+      }
+    } catch (error) {
+      console.error('Failed to get AI insight:', error)
+    } finally {
+      setIsLoadingInsight(false)
+    }
+  }, [isLoadingInsight])
 
   // Listen for live activity updates
   useEffect(() => {
@@ -73,9 +106,17 @@ export function SessionChat({ isVisible, onClose, sessionSummary, onAddToWorkspa
             app: activity.app,
             file: activity.file,
             screenshot: activity.screenshot,
-            isRelevant: true
+            isRelevant: true,
+            id: `activity-${Date.now()}`
           }]
         })
+        
+        // Count relevant activities and trigger AI insight every 5 activities
+        activityCountRef.current++
+        if (activityCountRef.current >= 5) {
+          activityCountRef.current = 0
+          generateAIInsight()
+        }
       }
     }
 
@@ -84,14 +125,30 @@ export function SessionChat({ isVisible, onClose, sessionSummary, onAddToWorkspa
     // Add initial system message
     setMessages([{
       type: 'system',
-      content: 'Session started. Activity tracking active. Add notes by typing below.',
+      content: '🤖 Session gestartet. KI analysiert live was du machst.',
       timestamp: Date.now()
     }])
 
+    // Periodic AI insight (every 60 seconds)
+    const insightInterval = setInterval(() => {
+      generateAIInsight()
+    }, 60000)
+
     return () => {
       window.api.removeAllListeners('session:activity')
+      clearInterval(insightInterval)
     }
-  }, [])
+  }, [generateAIInsight])
+
+  // Delete a message/note
+  const handleDeleteMessage = async (msgId: string | undefined, msgContent: string) => {
+    if (!msgId) return
+    
+    setMessages(prev => prev.filter(m => m.id !== msgId))
+    
+    // Also remove from backend notes if it was a note
+    await window.api.invoke('session:remove-note', msgContent)
+  }
 
   // Add summary message when session ends
   useEffect(() => {
@@ -122,11 +179,14 @@ export function SessionChat({ isVisible, onClose, sessionSummary, onAddToWorkspa
     const noteText = inputValue.trim()
     setInputValue('')
     
+    const noteId = `note-${Date.now()}`
+    
     // Add to local messages
     setMessages(prev => [...prev, {
       type: 'note',
       content: noteText,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      id: noteId
     }])
     
     // Send to backend
@@ -236,15 +296,38 @@ export function SessionChat({ isVisible, onClose, sessionSummary, onAddToWorkspa
                   </div>
                 )}
                 {msg.type === 'note' && (
-                  <div className="flex items-start gap-2">
+                  <div className="flex items-start gap-2 group">
                     <Clock size={12} className="text-blue-600 mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <span>{msg.content}</span>
-                        <span className="text-[10px] text-gray-400 flex-shrink-0">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-gray-400 flex-shrink-0">
+                            {formatTime(msg.timestamp)}
+                          </span>
+                          <button
+                            onClick={() => handleDeleteMessage(msg.id, msg.content)}
+                            className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-100 rounded transition-all"
+                            title="Delete note"
+                          >
+                            <Trash2 size={10} className="text-red-500" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {msg.type === 'ai_insight' && (
+                  <div className="flex items-start gap-2 bg-purple-50 rounded-lg p-2 border border-purple-200">
+                    <Bot size={12} className="text-purple-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-[10px] font-medium text-purple-600 uppercase tracking-wide">KI Insight</span>
+                        <span className="text-[10px] text-purple-400">
                           {formatTime(msg.timestamp)}
                         </span>
                       </div>
+                      <span className="text-purple-900">{msg.content}</span>
                     </div>
                   </div>
                 )}
@@ -298,6 +381,12 @@ export function SessionChat({ isVisible, onClose, sessionSummary, onAddToWorkspa
                 {msg.type === 'system' && msg.content}
               </div>
             ))}
+            {isLoadingInsight && (
+              <div className="flex items-center gap-2 text-xs text-purple-500 bg-purple-50 rounded-lg p-2">
+                <Loader2 size={12} className="animate-spin" />
+                <span>KI analysiert...</span>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 

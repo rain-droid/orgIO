@@ -633,18 +633,66 @@ export const Mainbar = () => {
     setIsVoiceActive(!isVoiceActive)
   }
 
-  // Handle voice transcript - add as session note or send to chat
+  // Handle voice transcript - add as session note or process commands
   const handleVoiceTranscript = useCallback(async (text: string) => {
+    const lowerText = text.toLowerCase().trim()
+    
+    // Voice commands
+    if (lowerText.startsWith('lösche') || lowerText.startsWith('delete') || lowerText.startsWith('entferne')) {
+      // Delete command - remove last note or specific note
+      if (lowerText.includes('letzte') || lowerText.includes('last')) {
+        await window.api.invoke('session:remove-last-note')
+        console.log('[Voice] Removed last note')
+      } else {
+        // Try to find and remove specific text
+        const searchText = text.replace(/^(lösche|delete|entferne)\s*/i, '').trim()
+        if (searchText) {
+          await window.api.invoke('session:remove-note', searchText)
+          console.log('[Voice] Removed note containing:', searchText)
+        }
+      }
+      return
+    }
+    
+    if (lowerText.startsWith('stopp') || lowerText.startsWith('stop')) {
+      // Stop session command
+      if (isRecording) {
+        const result = await window.api.invoke('session:end', activitiesRef.current)
+        if (result && !result.error) {
+          setIsRecording(false)
+        }
+      }
+      return
+    }
+    
+    if (lowerText.startsWith('start')) {
+      // Start session command
+      if (!isRecording && selectedProject) {
+        const result = await window.api.invoke('session:start', selectedProject, userRole)
+        if (result && !result.error) {
+          activitiesRef.current = []
+          setIsRecording(true)
+        }
+      }
+      return
+    }
+    
+    // Default: add as note during session
     if (isRecording) {
-      // During session, add as note
-      await window.api.invoke('session:add-note', `🎤 ${text}`)
-      console.log('[Voice] Added note to session:', text)
+      // Clean up common prefixes
+      let noteText = text
+        .replace(/^(notiz|note|add|hinzufügen)\s*:?\s*/i, '')
+        .trim()
+      
+      if (noteText) {
+        await window.api.invoke('session:add-note', `🎤 ${noteText}`)
+        console.log('[Voice] Added note to session:', noteText)
+      }
     } else {
       // Not in session, could open chat and send
-      // For now just log it
       console.log('[Voice] Transcript (no session):', text)
     }
-  }, [isRecording])
+  }, [isRecording, selectedProject, userRole])
 
   const handleAddToWorkspace = async (summary: SessionSummary) => {
     // Open the web app to the submission review page

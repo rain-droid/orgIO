@@ -143,6 +143,27 @@ class ActivityTracker {
   }
   
   /**
+   * Remove a manual note by text content
+   */
+  removeNote(text: string): void {
+    const index = this.manualNotes.findIndex(n => n.text === text || n.text.includes(text))
+    if (index !== -1) {
+      this.manualNotes.splice(index, 1)
+      console.log('[ActivityTracker] Removed manual note:', text)
+    }
+  }
+  
+  /**
+   * Remove the last manual note
+   */
+  removeLastNote(): void {
+    if (this.manualNotes.length > 0) {
+      const removed = this.manualNotes.pop()
+      console.log('[ActivityTracker] Removed last note:', removed?.text)
+    }
+  }
+  
+  /**
    * Get manual notes
    */
   getNotes(): ManualNote[] {

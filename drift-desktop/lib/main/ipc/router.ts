@@ -374,8 +374,67 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     return { ok: true }
   })
   
+  ipcMain.handle('session:remove-note', (_evt, text: string) => {
+    activityTracker.removeNote(text)
+    return { ok: true }
+  })
+  
+  ipcMain.handle('session:remove-last-note', () => {
+    activityTracker.removeLastNote()
+    return { ok: true }
+  })
+  
   ipcMain.handle('session:get-status', () => {
     return activityTracker.getStatus()
+  })
+
+  // Get live AI insight about current session
+  ipcMain.handle('session:get-live-insight', async () => {
+    const s = await getStore()
+    const authToken = s.get('authToken')
+    
+    if (!authToken) {
+      return { error: 'Not authenticated' }
+    }
+    
+    // Get current activities
+    const activities = activityTracker.getActivities()
+    const notes = activityTracker.getNotes()
+    const status = activityTracker.getStatus()
+    
+    if (activities.length === 0) {
+      return { insight: null }
+    }
+    
+    try {
+      const response = await fetch(`${DRIFT_API_URL}/desktop/session/live-insight`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          activities: activities.slice(-10).map(a => ({
+            app: a.app,
+            title: a.title,
+            file: a.file,
+            duration: a.duration
+          })),
+          notes: notes.slice(-5).map(n => n.text),
+          totalDuration: status.activityCount * 3 // rough estimate in seconds
+        })
+      })
+      
+      if (!response.ok) {
+        return { error: `Insight failed: ${response.status}` }
+      }
+      
+      const data = await response.json()
+      return { insight: data.insight }
+    } catch (error) {
+      console.error('Live insight error:', error)
+      return { error: String(error) }
+    }
   })
 
   // Analyze session and update workspace tasks
