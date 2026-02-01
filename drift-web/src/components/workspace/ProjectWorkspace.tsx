@@ -157,12 +157,46 @@ export function ProjectWorkspace({ brief, userRole, onBack }: ProjectWorkspacePr
     }
   }, [brief.id, getToken, fetchTasks])
 
-  // Auto-generate tasks on mount if none exist
+  // Load tasks from DB on mount, only generate if none exist
   useEffect(() => {
-    if (tasks.length === 0) {
-      generateTasks()
+    const loadTasks = async () => {
+      try {
+        const token = await getToken()
+        const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/briefs/${brief.id}/tasks`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+        if (response.ok) {
+          const data = await response.json()
+          const existingTasks = data.tasks || []
+          
+          if (existingTasks.length > 0) {
+            // Use existing tasks from DB
+            setTasks(existingTasks.map((t: any) => ({
+              id: t.id,
+              title: t.title,
+              description: t.description || '',
+              priority: t.priority || 'medium',
+              estimated_hours: t.estimated_hours || 2,
+              status: t.status || 'todo'
+            })))
+          } else {
+            // No tasks in DB, generate new ones
+            generateTasks()
+          }
+        } else {
+          // API error, try to generate
+          generateTasks()
+        }
+      } catch (error) {
+        console.error('Failed to load tasks:', error)
+        generateTasks()
+      }
     }
-  }, [])
+    
+    loadTasks()
+  }, [brief.id])
 
   const generateTasks = async () => {
     setLoading(true)

@@ -8,7 +8,6 @@ import {
   LifeBuoy,
   Send,
   Zap,
-  MessageSquare,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -34,7 +33,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   }
   briefs?: Brief[]
   onBriefSelect?: (brief: Brief) => void
-  onViewChange?: (view: 'home' | 'briefs' | 'reviews' | 'chat') => void
+  onViewChange?: (view: 'home' | 'briefs' | 'reviews') => void
   currentView?: string
   userRole?: Role
 }
@@ -55,13 +54,6 @@ export function AppSidebar({
       icon: Home,
       isActive: currentView === 'home',
       onClick: () => onViewChange?.('home'),
-    },
-    {
-      title: "Chat",
-      url: "#",
-      icon: MessageSquare,
-      isActive: currentView === 'chat',
-      onClick: () => onViewChange?.('chat'),
     },
     {
       title: "Projects",
