@@ -40,7 +40,7 @@ class SessionEndRequest(BaseModel):
 
 class DesktopSyncRequest(BaseModel):
     """Request to sync desktop state with server."""
-    userId: str
+    userId: Optional[str] = None  # Optional - extracted from token
     orgId: Optional[str] = None
     activities: Optional[List[ActivityEntry]] = None
 
