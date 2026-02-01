@@ -76,13 +76,6 @@ export function AppSidebar({
       isActive: currentView === 'reviews',
       onClick: () => onViewChange?.('reviews'),
     },
-    {
-      title: "MCP Hub",
-      url: "#",
-      icon: Zap,
-      isActive: currentView === 'mcp-hub',
-      onClick: () => onViewChange?.('mcp-hub'),
-    },
   ]
 
   const projects = briefs.filter(b => b.status === 'active').slice(0, 3).map(brief => ({
