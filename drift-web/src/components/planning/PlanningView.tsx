@@ -110,7 +110,7 @@ export function PlanningView({ projectName, onComplete, onCancel }: PlanningView
               title: t.title,
               description: t.description || '',
               priority: t.priority || 'medium',
-              estimatedHours: t.estimatedHours,
+              estimatedHours: t.estimatedHours || t.estimated_hours,
               checked: true,
             }))
             
@@ -162,7 +162,7 @@ export function PlanningView({ projectName, onComplete, onCancel }: PlanningView
           title: t.title,
           description: t.description || '',
           priority: t.priority || 'medium',
-          estimatedHours: t.estimatedHours,
+          estimatedHours: t.estimatedHours || (t as any).estimated_hours,
           checked: true,
         }))
         
