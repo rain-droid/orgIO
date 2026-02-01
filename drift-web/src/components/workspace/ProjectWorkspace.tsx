@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useAuth } from '@clerk/clerk-react'
 import { api } from '@/lib/api'
 import { AICopilot } from '@/components/ai/AICopilot'
