@@ -712,11 +712,18 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     } catch (error: any) {
       console.error('[drift:sync] ❌ Error:', error.message)
       if (error.response) {
-        console.error('[drift:sync] Response error:', error.response.status, error.response.data)
-        return { error: `API Error: ${error.response.status} - ${JSON.stringify(error.response.data)}` }
+        const status = error.response.status
+        console.error('[drift:sync] Response error:', status, error.response.data)
+        
+        // Specific handling for auth errors
+        if (status === 401 || status === 403) {
+          return { error: `401 - Not authenticated or token expired` }
+        }
+        
+        return { error: `API Error: ${status} - ${JSON.stringify(error.response.data)}` }
       } else if (error.request) {
         console.error('[drift:sync] No response received:', error.request)
-        return { error: 'Keine Verbindung zum Server möglich. Bitte prüfe deine Internetverbindung.' }
+        return { error: 'No connection to server' }
       } else {
         console.error('[drift:sync] Request setup error:', error.message)
         return { error: error.message }

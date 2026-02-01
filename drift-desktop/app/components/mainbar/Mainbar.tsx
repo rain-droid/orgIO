@@ -598,10 +598,12 @@ export const Mainbar = () => {
           setSessionSummary(null)
           setSessionEnded(false)
           setIsRecording(true)
-          setShowSessionActivity(true) // Open chat when session starts
+          setShowSessionActivity(true)
         } else {
           console.error('Failed to start session:', result?.error)
         }
+      } else {
+        console.error('No project selected')
       }
     } else {
       // End session

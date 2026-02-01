@@ -99,10 +99,19 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Check if we have a stored token
-    window.api.invoke('get-auth-token').then((token: string | null) => {
+    // Check if we have a stored token AND validate it
+    window.api.invoke('get-auth-token').then(async (token: string | null) => {
       if (token) {
-        setIsAuthenticated(true)
+        // Validate token by trying to sync
+        const result = await window.api.invoke('drift:sync')
+        if (result?.error?.includes('401') || result?.error?.includes('Not authenticated')) {
+          // Token is invalid/expired - clear it
+          console.log('[Auth] Token expired, clearing...')
+          await window.api.invoke('store-auth-token', null)
+          setIsAuthenticated(false)
+        } else {
+          setIsAuthenticated(true)
+        }
       }
       setIsLoading(false)
     })
