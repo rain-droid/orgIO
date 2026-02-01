@@ -4,7 +4,6 @@ import { AppSidebar } from '@/components/app-sidebar'
 import { Onboarding } from '@/components/onboarding'
 import { ProjectWorkspace } from '@/components/workspace/ProjectWorkspace'
 import { PlanningView } from '@/components/planning/PlanningView'
-import { AICopilot } from '@/components/ai/AICopilot'
 import { DesktopAuth } from '@/pages/DesktopAuth'
 import {
   SidebarInset,
@@ -420,12 +419,9 @@ export default function App() {
                 <div aria-hidden className="absolute bottom-0 right-0 w-2.5 h-2.5 border-r-2 border-b-2 border-foreground/50" />
 
                 <div className="border bg-background p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-sm font-medium">New Project</h3>
-                      <p className="text-xs text-muted-foreground mt-1">Describe what you want to build</p>
-                    </div>
-                    <Sparkles className="size-5 text-muted-foreground" />
+                  <div className="mb-4">
+                    <h3 className="text-sm font-medium">New Project</h3>
+                    <p className="text-xs text-muted-foreground mt-1">Describe what you want to build</p>
                   </div>
                   <div className="flex gap-3">
                     <input
@@ -656,8 +652,6 @@ export default function App() {
           </div>
         )}
       </SidebarInset>
-
-      <AICopilot userRole={currentRole} />
     </SidebarProvider>
   )
 }
