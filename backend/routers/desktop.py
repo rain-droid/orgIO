@@ -135,13 +135,12 @@ async def start_session(
     if brief_result.data.get("org_id") != org_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # Create session record
+    # Create session in DB
     session_data = {
         "user_id": user_id,
         "org_id": org_id,
         "brief_id": request.briefId,
         "role": request.role,
-        "started_at": datetime.utcnow().isoformat(),
         "status": "active"
     }
     
@@ -149,25 +148,33 @@ async def start_session(
         .insert(session_data)\
         .execute()
     
-    session_id = result.data[0]["id"] if result.data else None
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create session")
+    
+    session = result.data[0]
+    session_id = session["id"]
+    started_at = session.get("started_at") or session.get("created_at")
     
     # Notify web clients
-    await websocket_manager.broadcast_event(
-        "session:started",
-        {
-            "sessionId": session_id,
-            "userId": user_id,
-            "briefId": request.briefId,
-            "briefName": brief_result.data["name"]
-        },
-        org_id
-    )
+    try:
+        await websocket_manager.broadcast_event(
+            "session:started",
+            {
+                "sessionId": session_id,
+                "userId": user_id,
+                "briefId": request.briefId,
+                "briefName": brief_result.data["name"]
+            },
+            org_id
+        )
+    except:
+        pass  # WebSocket notification is optional
     
     return {
         "sessionId": session_id,
         "briefId": request.briefId,
         "briefName": brief_result.data["name"],
-        "startedAt": session_data["started_at"]
+        "startedAt": started_at
     }
 
 
@@ -186,15 +193,16 @@ async def end_session(
     
     supabase = get_supabase()
     
-    # Get session
+    # Get session from DB
     session_result = supabase.table("work_sessions")\
         .select("*")\
         .eq("id", request.sessionId)\
+        .eq("status", "active")\
         .single()\
         .execute()
     
     if not session_result.data:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Session not found or already ended")
     
     session = session_result.data
     
@@ -202,16 +210,23 @@ async def end_session(
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Calculate duration
-    started_at = datetime.fromisoformat(session["started_at"].replace("Z", "+00:00"))
-    ended_at = datetime.utcnow()
-    duration_minutes = int((ended_at - started_at).total_seconds() / 60)
+    started_at_str = session.get("started_at") or session.get("created_at")
+    if "Z" in started_at_str:
+        started_at = datetime.fromisoformat(started_at_str.replace("Z", "+00:00"))
+    elif "+" in started_at_str:
+        started_at = datetime.fromisoformat(started_at_str)
+    else:
+        started_at = datetime.fromisoformat(started_at_str)
     
-    # Update session
+    ended_at = datetime.utcnow()
+    duration_minutes = max(1, int((ended_at - started_at.replace(tzinfo=None)).total_seconds() / 60))
+    
+    # Update session in DB
     supabase.table("work_sessions")\
         .update({
             "ended_at": ended_at.isoformat(),
-            "status": "completed",
-            "duration_minutes": duration_minutes
+            "duration_minutes": duration_minutes,
+            "status": "completed"
         })\
         .eq("id", request.sessionId)\
         .execute()
@@ -236,10 +251,14 @@ async def end_session(
         sorted_apps = sorted(app_durations.items(), key=lambda x: x[1], reverse=True)[:3]
         for app, duration in sorted_apps:
             mins = duration // 60
-            summary_lines.append(f"Worked in {app} for {mins} minutes")
+            if mins > 0:
+                summary_lines.append(f"Worked in {app} for {mins} minutes")
     
     if request.summary:
         summary_lines.insert(0, request.summary)
+    
+    if not summary_lines:
+        summary_lines = [f"Work session: {duration_minutes} minutes"]
     
     # Create submission
     submission_data = {
@@ -259,33 +278,22 @@ async def end_session(
     
     submission_id = submission_result.data[0]["id"] if submission_result.data else None
     
-    # Store activities
-    if request.activities and submission_id:
-        activities_data = [{
-            "submission_id": submission_id,
-            "app": a.app,
-            "title": a.title,
-            "duration": a.duration,
-            "timestamp": a.timestamp
-        } for a in request.activities]
-        
-        supabase.table("submission_activities")\
-            .insert(activities_data)\
-            .execute()
-    
     # Notify web clients
-    await websocket_manager.broadcast_event(
-        "session:ended",
-        {
-            "sessionId": request.sessionId,
-            "submissionId": submission_id,
-            "userId": user_id,
-            "userName": user_name,
-            "briefId": session["brief_id"],
-            "durationMinutes": duration_minutes
-        },
-        session.get("org_id")
-    )
+    try:
+        await websocket_manager.broadcast_event(
+            "session:ended",
+            {
+                "sessionId": request.sessionId,
+                "submissionId": submission_id,
+                "userId": user_id,
+                "userName": user_name,
+                "briefId": session["brief_id"],
+                "durationMinutes": duration_minutes
+            },
+            session.get("org_id")
+        )
+    except:
+        pass  # WebSocket notification is optional
     
     return {
         "sessionId": request.sessionId,
