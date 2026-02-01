@@ -44,7 +44,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState<View>('home')
   const [selectedBrief, setSelectedBrief] = useState<Brief | null>(null)
   const [inputValue, setInputValue] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loading] = useState(false)
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [checkingUser, setCheckingUser] = useState(true)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
@@ -339,7 +339,6 @@ export default function App() {
     return (
       <PlanningView
         projectName={planningProjectName}
-        userRole={currentRole}
         onComplete={handlePlanningComplete}
         onCancel={handlePlanningCancel}
       />
