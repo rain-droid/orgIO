@@ -50,10 +50,23 @@ export default function App() {
   const currentRole: Role = driftUser?.role || 'dev'
 
   useEffect(() => {
-    if (!isSignedIn || !clerkUser || !orgId) {
+    // Don't run if already completed onboarding this session
+    if (needsOnboarding === false && driftUser?.role) {
+      return
+    }
+    
+    if (!isSignedIn || !clerkUser) {
       setCheckingUser(false)
       return
     }
+    
+    // If no org, show onboarding but don't make API calls
+    if (!orgId) {
+      setCheckingUser(false)
+      setNeedsOnboarding(true)
+      return
+    }
+    
     const checkUser = async () => {
       setCheckingUser(true)
       try {
@@ -67,25 +80,32 @@ export default function App() {
         
         if (!token) {
           setNeedsOnboarding(true)
+          setCheckingUser(false)
           return
         }
         
         api.setToken(token)
 
         const session = await api.getSession()
+        
         setDriftUser({
           id: session.userId,
-          orgId: session.orgId,
+          orgId: session.orgId || orgId, // Use Clerk's orgId as fallback
           email: session.email || '',
           name: session.name || 'User',
           avatarUrl: session.avatarUrl,
           role: session.role,
         })
 
+        // Only show onboarding if user is truly new (first time ever)
         if (session.isNew) {
           setNeedsOnboarding(true)
+          setCheckingUser(false)
           return
         }
+        
+        // User exists - don't show onboarding
+        setNeedsOnboarding(false)
 
         const briefsResponse = await api.listBriefs()
         const briefsData = briefsResponse.briefs.map((brief) => ({
@@ -114,8 +134,12 @@ export default function App() {
           }))
           setSubmissions(subsData)
         }
-      } catch {
-        setNeedsOnboarding(true)
+      } catch (err) {
+        console.error('checkUser error:', err)
+        // Only show onboarding on error if user doesn't exist yet
+        if (!driftUser) {
+          setNeedsOnboarding(true)
+        }
       } finally {
         setCheckingUser(false)
       }
@@ -276,7 +300,13 @@ export default function App() {
     )
   }
 
-  if (!orgId || needsOnboarding) {
+  // Show onboarding only if explicitly needed AND user doesn't have a role yet
+  if (needsOnboarding && (!driftUser || !driftUser.role)) {
+    return <Onboarding onComplete={handleOnboardingComplete} />
+  }
+  
+  // Also show onboarding if no org is selected
+  if (!orgId) {
     return <Onboarding onComplete={handleOnboardingComplete} />
   }
 

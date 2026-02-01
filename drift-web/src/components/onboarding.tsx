@@ -32,6 +32,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     try {
       const org = await createOrganization({ name: orgName })
       await setActive?.({ organization: org.id })
+      // Wait a moment for Clerk to propagate the org change
+      await new Promise(r => setTimeout(r, 1000))
       setStep('role')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create organization')
