@@ -1,210 +1,300 @@
--- DRIFT Database Schema
+-- ============================================
+-- DRIFT Database Schema (Complete)
 -- Run this in Supabase SQL Editor
+-- Safe to re-run - uses IF NOT EXISTS everywhere
+-- ============================================
 
 -- Enable UUID extension
-create extension if not exists "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================
 -- USERS TABLE (synced from Clerk)
 -- ============================================
-create table if not exists users (
-  id text primary key,                    -- Clerk user_id (e.g. "user_xxxxx")
-  org_id text,                            -- Clerk org_id
-  email text,
-  name text,
-  avatar_url text,
-  role text not null default 'dev' check (role in ('pm', 'dev', 'designer')),
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,                    -- Clerk user_id (e.g. "user_xxxxx")
+  org_id TEXT,                            -- Clerk org_id
+  email TEXT,
+  name TEXT,
+  avatar_url TEXT,
+  role TEXT NOT NULL DEFAULT 'dev' CHECK (role IN ('pm', 'dev', 'designer')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Index for org queries
-create index if not exists users_org_id_idx on users(org_id);
+CREATE INDEX IF NOT EXISTS users_org_id_idx ON users(org_id);
 
 -- ============================================
 -- BRIEFS TABLE
 -- ============================================
-create table if not exists briefs (
-  id uuid primary key default uuid_generate_v4(),
-  org_id text not null,
-  name text not null,
-  description text,
-  status text not null default 'planning' check (status in ('planning', 'active', 'completed')),
-  created_by text not null,
-  content jsonb,
-  created_at timestamptz default now()
+CREATE TABLE IF NOT EXISTS briefs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  org_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'planning' CHECK (status IN ('planning', 'active', 'completed')),
+  created_by TEXT NOT NULL,
+  content JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Index for org queries
-create index if not exists briefs_org_id_idx on briefs(org_id);
+CREATE INDEX IF NOT EXISTS briefs_org_id_idx ON briefs(org_id);
+CREATE INDEX IF NOT EXISTS briefs_created_by_idx ON briefs(created_by);
 
 -- ============================================
 -- TASKS TABLE
 -- ============================================
-create table if not exists tasks (
-  id uuid primary key default uuid_generate_v4(),
-  brief_id uuid not null references briefs(id) on delete cascade,
-  role text not null check (role in ('pm', 'dev', 'designer')),
-  title text not null,
-  description text,
-  status text not null default 'todo' check (status in ('todo', 'in_progress', 'done')),
-  created_at timestamptz default now()
+CREATE TABLE IF NOT EXISTS tasks (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  brief_id UUID NOT NULL REFERENCES briefs(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('pm', 'dev', 'designer')),
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'done')),
+  priority TEXT DEFAULT 'medium' CHECK (priority IN ('high', 'medium', 'low')),
+  estimated_hours INTEGER DEFAULT 2,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Index for brief queries
-create index if not exists tasks_brief_id_idx on tasks(brief_id);
-create index if not exists tasks_role_idx on tasks(role);
+CREATE INDEX IF NOT EXISTS tasks_brief_id_idx ON tasks(brief_id);
+CREATE INDEX IF NOT EXISTS tasks_role_idx ON tasks(role);
+CREATE INDEX IF NOT EXISTS tasks_status_idx ON tasks(status);
+
+-- Add priority column if not exists
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'tasks' AND column_name = 'priority'
+  ) THEN
+    ALTER TABLE tasks ADD COLUMN priority TEXT DEFAULT 'medium' CHECK (priority IN ('high', 'medium', 'low'));
+  END IF;
+END $$;
+
+-- Add estimated_hours column if not exists
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'tasks' AND column_name = 'estimated_hours'
+  ) THEN
+    ALTER TABLE tasks ADD COLUMN estimated_hours INTEGER DEFAULT 2;
+  END IF;
+END $$;
+
+-- ============================================
+-- WORK SESSIONS TABLE (Desktop App Sessions)
+-- ============================================
+CREATE TABLE IF NOT EXISTS work_sessions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id TEXT NOT NULL,
+  org_id TEXT,
+  brief_id UUID REFERENCES briefs(id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'dev',
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  ended_at TIMESTAMPTZ,
+  duration_minutes INTEGER,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'cancelled')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS work_sessions_user_idx ON work_sessions(user_id);
+CREATE INDEX IF NOT EXISTS work_sessions_brief_idx ON work_sessions(brief_id);
+CREATE INDEX IF NOT EXISTS work_sessions_status_idx ON work_sessions(status);
+CREATE INDEX IF NOT EXISTS work_sessions_org_idx ON work_sessions(org_id);
 
 -- ============================================
 -- SUBMISSIONS TABLE
 -- ============================================
-create table if not exists submissions (
-  id uuid primary key default uuid_generate_v4(),
-  brief_id uuid not null references briefs(id) on delete cascade,
-  user_id text not null,
-  user_name text not null,
-  role text not null check (role in ('pm', 'dev', 'designer')),
-  summary_lines text[] not null default '{}',
-  duration_minutes int not null default 0,
-  matched_tasks uuid[] not null default '{}',
-  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
-  created_at timestamptz default now()
+CREATE TABLE IF NOT EXISTS submissions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  brief_id UUID NOT NULL REFERENCES briefs(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  user_name TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('pm', 'dev', 'designer')),
+  summary_lines TEXT[] NOT NULL DEFAULT '{}',
+  duration_minutes INTEGER NOT NULL DEFAULT 0,
+  matched_tasks UUID[] NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'reviewed')),
+  session_id UUID REFERENCES work_sessions(id),
+  ai_analysis TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Index for brief and status queries
-create index if not exists submissions_brief_id_idx on submissions(brief_id);
-create index if not exists submissions_status_idx on submissions(status);
+CREATE INDEX IF NOT EXISTS submissions_brief_id_idx ON submissions(brief_id);
+CREATE INDEX IF NOT EXISTS submissions_status_idx ON submissions(status);
+CREATE INDEX IF NOT EXISTS submissions_user_idx ON submissions(user_id);
+
+-- Add session_id column if not exists
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'submissions' AND column_name = 'session_id'
+  ) THEN
+    ALTER TABLE submissions ADD COLUMN session_id UUID REFERENCES work_sessions(id);
+  END IF;
+END $$;
+
+-- Add ai_analysis column if not exists
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'submissions' AND column_name = 'ai_analysis'
+  ) THEN
+    ALTER TABLE submissions ADD COLUMN ai_analysis TEXT;
+  END IF;
+END $$;
+
+-- Update status check to include 'reviewed'
+DO $$
+BEGIN
+  -- Drop old constraint if exists and create new one
+  ALTER TABLE submissions DROP CONSTRAINT IF EXISTS submissions_status_check;
+  ALTER TABLE submissions ADD CONSTRAINT submissions_status_check 
+    CHECK (status IN ('pending', 'approved', 'rejected', 'reviewed'));
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END $$;
 
 -- ============================================
 -- ROW LEVEL SECURITY (RLS)
 -- ============================================
 
 -- Enable RLS on all tables
-alter table users enable row level security;
-alter table briefs enable row level security;
-alter table tasks enable row level security;
-alter table submissions enable row level security;
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE briefs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE submissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE work_sessions ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies (safe re-run)
-drop policy if exists "Allow all users access" on users;
-drop policy if exists "Allow all briefs access" on briefs;
-drop policy if exists "Allow all tasks access" on tasks;
-drop policy if exists "Allow all submissions access" on submissions;
+DROP POLICY IF EXISTS "Allow all users access" ON users;
+DROP POLICY IF EXISTS "Allow all briefs access" ON briefs;
+DROP POLICY IF EXISTS "Allow all tasks access" ON tasks;
+DROP POLICY IF EXISTS "Allow all submissions access" ON submissions;
+DROP POLICY IF EXISTS "Allow all work_sessions" ON work_sessions;
 
 -- For MVP: allow all authenticated access (refine later with org_id checks)
--- Users policies
-create policy "Allow all users access" on users
-  for all using (true) with check (true);
+CREATE POLICY "Allow all users access" ON users
+  FOR ALL USING (true) WITH CHECK (true);
 
--- Briefs policies
-create policy "Allow all briefs access" on briefs
-  for all using (true) with check (true);
+CREATE POLICY "Allow all briefs access" ON briefs
+  FOR ALL USING (true) WITH CHECK (true);
 
--- Tasks policies
-create policy "Allow all tasks access" on tasks
-  for all using (true) with check (true);
+CREATE POLICY "Allow all tasks access" ON tasks
+  FOR ALL USING (true) WITH CHECK (true);
 
--- Submissions policies
-create policy "Allow all submissions access" on submissions
-  for all using (true) with check (true);
+CREATE POLICY "Allow all submissions access" ON submissions
+  FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow all work_sessions" ON work_sessions
+  FOR ALL USING (true) WITH CHECK (true);
 
 -- ============================================
 -- HELPER FUNCTIONS
 -- ============================================
 
 -- Function to upsert user (called from frontend on login)
-create or replace function upsert_user(
-  p_id text,
-  p_org_id text,
-  p_email text,
-  p_name text,
-  p_avatar_url text
+CREATE OR REPLACE FUNCTION upsert_user(
+  p_id TEXT,
+  p_org_id TEXT,
+  p_email TEXT,
+  p_name TEXT,
+  p_avatar_url TEXT
 )
-returns users as $$
-declare
+RETURNS users AS $$
+DECLARE
   v_user users;
-begin
-  insert into users (id, org_id, email, name, avatar_url, updated_at)
-  values (p_id, p_org_id, p_email, p_name, p_avatar_url, now())
-  on conflict (id) do update set
-    org_id = excluded.org_id,
-    email = excluded.email,
-    name = excluded.name,
-    avatar_url = excluded.avatar_url,
-    updated_at = now()
-  returning * into v_user;
+BEGIN
+  INSERT INTO users (id, org_id, email, name, avatar_url, updated_at)
+  VALUES (p_id, p_org_id, p_email, p_name, p_avatar_url, NOW())
+  ON CONFLICT (id) DO UPDATE SET
+    org_id = EXCLUDED.org_id,
+    email = EXCLUDED.email,
+    name = EXCLUDED.name,
+    avatar_url = EXCLUDED.avatar_url,
+    updated_at = NOW()
+  RETURNING * INTO v_user;
   
-  return v_user;
-end;
-$$ language plpgsql;
+  RETURN v_user;
+END;
+$$ LANGUAGE plpgsql;
 
 -- Function to update user role
-create or replace function update_user_role(p_user_id text, p_role text)
-returns users as $$
-declare
+CREATE OR REPLACE FUNCTION update_user_role(p_user_id TEXT, p_role TEXT)
+RETURNS users AS $$
+DECLARE
   v_user users;
-begin
-  update users
-  set role = p_role, updated_at = now()
-  where id = p_user_id
-  returning * into v_user;
+BEGIN
+  UPDATE users
+  SET role = p_role, updated_at = NOW()
+  WHERE id = p_user_id
+  RETURNING * INTO v_user;
   
-  return v_user;
-end;
-$$ language plpgsql;
+  RETURN v_user;
+END;
+$$ LANGUAGE plpgsql;
 
 -- Function to get brief progress
-create or replace function get_brief_progress(p_brief_id uuid)
-returns table (
-  role text,
-  total bigint,
-  done bigint
-) as $$
-begin
-  return query
-  select 
+CREATE OR REPLACE FUNCTION get_brief_progress(p_brief_id UUID)
+RETURNS TABLE (
+  role TEXT,
+  total BIGINT,
+  done BIGINT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
     t.role,
-    count(*)::bigint as total,
-    count(*) filter (where t.status = 'done')::bigint as done
-  from tasks t
-  where t.brief_id = p_brief_id
-  group by t.role;
-end;
-$$ language plpgsql;
+    COUNT(*)::BIGINT AS total,
+    COUNT(*) FILTER (WHERE t.status = 'done')::BIGINT AS done
+  FROM tasks t
+  WHERE t.brief_id = p_brief_id
+  GROUP BY t.role;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to get project status summary
+CREATE OR REPLACE FUNCTION get_project_status(p_brief_id UUID)
+RETURNS TABLE (
+  total_tasks BIGINT,
+  done_tasks BIGINT,
+  in_progress_tasks BIGINT,
+  todo_tasks BIGINT,
+  completion_percent INTEGER,
+  total_hours INTEGER,
+  completed_hours INTEGER
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    COUNT(*)::BIGINT AS total_tasks,
+    COUNT(*) FILTER (WHERE status = 'done')::BIGINT AS done_tasks,
+    COUNT(*) FILTER (WHERE status = 'in_progress')::BIGINT AS in_progress_tasks,
+    COUNT(*) FILTER (WHERE status = 'todo')::BIGINT AS todo_tasks,
+    CASE 
+      WHEN COUNT(*) > 0 THEN (COUNT(*) FILTER (WHERE status = 'done') * 100 / COUNT(*))::INTEGER
+      ELSE 0
+    END AS completion_percent,
+    COALESCE(SUM(estimated_hours), 0)::INTEGER AS total_hours,
+    COALESCE(SUM(estimated_hours) FILTER (WHERE status = 'done'), 0)::INTEGER AS completed_hours
+  FROM tasks
+  WHERE brief_id = p_brief_id;
+END;
+$$ LANGUAGE plpgsql;
 
 -- ============================================
--- SEED DATA (Optional - for testing)
+-- VERIFICATION QUERY (check everything exists)
 -- ============================================
-
--- Uncomment to insert sample data:
-/*
-insert into briefs (org_id, name, description, status, created_by) values
-('org_demo', 'Apple Pay Checkout', 'Implement Apple Pay as a checkout option for faster mobile payments.', 'active', 'user_sarah');
-
--- Get the brief id for tasks
-do $$
-declare
-  v_brief_id uuid;
-begin
-  select id into v_brief_id from briefs where name = 'Apple Pay Checkout' limit 1;
-  
-  -- PM Tasks
-  insert into tasks (brief_id, role, title, description, status) values
-  (v_brief_id, 'pm', 'Define acceptance criteria', 'Document all acceptance criteria for Apple Pay feature', 'done'),
-  (v_brief_id, 'pm', 'Stakeholder alignment', 'Get sign-off from finance and legal teams', 'in_progress'),
-  (v_brief_id, 'pm', 'Launch checklist', 'Prepare go-live checklist and rollback plan', 'todo');
-  
-  -- Dev Tasks
-  insert into tasks (brief_id, role, title, description, status) values
-  (v_brief_id, 'dev', 'Stripe webhook setup', 'Implement webhook handler for Apple Pay events', 'done'),
-  (v_brief_id, 'dev', 'Payment API endpoint', 'Create POST /api/payments/apple-pay endpoint', 'in_progress'),
-  (v_brief_id, 'dev', 'Error handling', 'Add error handling for failed payments', 'todo'),
-  (v_brief_id, 'dev', 'Unit tests', 'Write tests for payment flow', 'todo');
-  
-  -- Designer Tasks
-  insert into tasks (brief_id, role, title, description, status) values
-  (v_brief_id, 'designer', 'Button component', 'Design Apple Pay button following Apple guidelines', 'done'),
-  (v_brief_id, 'designer', 'Error states', 'Design error and loading states', 'in_progress'),
-  (v_brief_id, 'designer', 'Success animation', 'Create success confirmation animation', 'todo');
-end $$;
-*/
+SELECT 
+  'Schema verification' AS check_type,
+  (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'users') AS users_table,
+  (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'briefs') AS briefs_table,
+  (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'tasks') AS tasks_table,
+  (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'submissions') AS submissions_table,
+  (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'work_sessions') AS work_sessions_table,
+  (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'tasks' AND column_name = 'priority') AS tasks_priority_col,
+  (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'tasks' AND column_name = 'estimated_hours') AS tasks_hours_col,
+  (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'submissions' AND column_name = 'session_id') AS submissions_session_col,
+  (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'submissions' AND column_name = 'ai_analysis') AS submissions_analysis_col;

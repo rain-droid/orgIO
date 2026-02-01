@@ -158,18 +158,30 @@ export function ProjectWorkspace({ brief, userRole, onBack }: ProjectWorkspacePr
   }, [brief.id, getToken, fetchTasks])
 
   // Load tasks from DB on mount, only generate if none exist
+  const [hasLoadedTasks, setHasLoadedTasks] = useState(false)
+  
   useEffect(() => {
+    if (hasLoadedTasks) return // Don't load again
+    
     const loadTasks = async () => {
+      setLoading(true)
       try {
         const token = await getToken()
+        console.log('[Workspace] Loading tasks for brief:', brief.id)
+        
         const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/briefs/${brief.id}/tasks`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         })
+        
+        console.log('[Workspace] Tasks API response:', response.status)
+        
         if (response.ok) {
           const data = await response.json()
           const existingTasks = data.tasks || []
+          
+          console.log('[Workspace] Found tasks:', existingTasks.length)
           
           if (existingTasks.length > 0) {
             // Use existing tasks from DB
@@ -178,32 +190,33 @@ export function ProjectWorkspace({ brief, userRole, onBack }: ProjectWorkspacePr
               title: t.title,
               description: t.description || '',
               priority: t.priority || 'medium',
-              estimated_hours: t.estimated_hours || 2,
+              estimated_hours: t.estimated_hours || t.estimatedHours || 2,
               status: t.status || 'todo'
             })))
+            setLoading(false)
           } else {
             // No tasks in DB, generate new ones
-            generateTasks()
+            console.log('[Workspace] No tasks found, generating...')
+            await doGenerateTasks(token)
           }
         } else {
-          // API error, try to generate
-          generateTasks()
+          console.error('[Workspace] Tasks API error:', response.status)
+          const token2 = await getToken()
+          await doGenerateTasks(token2)
         }
       } catch (error) {
-        console.error('Failed to load tasks:', error)
-        generateTasks()
+        console.error('[Workspace] Failed to load tasks:', error)
+        setLoading(false)
       }
+      setHasLoadedTasks(true)
     }
     
     loadTasks()
-  }, [brief.id])
-
-  const generateTasks = async () => {
-    setLoading(true)
+  }, [brief.id, hasLoadedTasks])
+  
+  // Separate generate function that doesn't depend on state
+  const doGenerateTasks = async (token: string | null) => {
     try {
-      const token = await getToken()
-      if (token) api.setToken(token)
-      
       const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/generate/tasks`, {
         method: 'POST',
         headers: {
@@ -222,16 +235,22 @@ export function ProjectWorkspace({ brief, userRole, onBack }: ProjectWorkspacePr
         id: `task-${i}`,
         title: t.title,
         description: t.description,
-        priority: t.priority,
+        priority: t.priority || 'medium',
         estimated_hours: t.estimated_hours || 2,
         status: 'todo' as const
       }))
       setTasks(generatedTasks)
     } catch (error) {
-      console.error('Failed to generate tasks:', error)
+      console.error('[Workspace] Failed to generate tasks:', error)
     } finally {
       setLoading(false)
     }
+  }
+
+  const generateTasks = async () => {
+    setLoading(true)
+    const token = await getToken()
+    await doGenerateTasks(token)
   }
 
   const toggleTaskStatus = (taskId: string) => {
