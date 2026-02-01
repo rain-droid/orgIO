@@ -57,10 +57,20 @@ export default function App() {
     const checkUser = async () => {
       setCheckingUser(true)
       try {
-        const token = await getToken()
-        if (token) {
-          api.setToken(token)
+        // Wait for token with retry
+        let token: string | null = null
+        for (let i = 0; i < 5; i++) {
+          token = await getToken()
+          if (token) break
+          await new Promise(r => setTimeout(r, 500))
         }
+        
+        if (!token) {
+          setNeedsOnboarding(true)
+          return
+        }
+        
+        api.setToken(token)
 
         const session = await api.getSession()
         setDriftUser({
@@ -118,10 +128,19 @@ export default function App() {
     setNeedsOnboarding(false)
     setCheckingUser(true)
     try {
-      const token = await getToken()
-      if (token) {
-        api.setToken(token)
+      // Wait for token with retry
+      let token: string | null = null
+      for (let i = 0; i < 5; i++) {
+        token = await getToken()
+        if (token) break
+        await new Promise(r => setTimeout(r, 500))
       }
+      
+      if (!token) {
+        throw new Error('Unable to get authentication token')
+      }
+      
+      api.setToken(token)
       const session = await api.getSession()
       setDriftUser({
         id: session.userId,

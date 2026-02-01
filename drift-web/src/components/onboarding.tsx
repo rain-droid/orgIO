@@ -58,10 +58,19 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setLoading(true)
     setError(null)
     try {
-      const token = await getToken()
-      if (token) {
-        api.setToken(token)
+      // Wait for token - retry a few times if not immediately available
+      let token: string | null = null
+      for (let i = 0; i < 5; i++) {
+        token = await getToken()
+        if (token) break
+        await new Promise(r => setTimeout(r, 500))
       }
+      
+      if (!token) {
+        throw new Error('Unable to get authentication token. Please try again.')
+      }
+      
+      api.setToken(token)
       await api.getSession()
       await api.updateUserRole(role)
       onComplete()
