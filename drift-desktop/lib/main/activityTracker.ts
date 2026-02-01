@@ -416,43 +416,42 @@ class ActivityTracker {
    */
   private async getActiveWindowWindows(): Promise<{ app: string; title: string } | null> {
     try {
-      const { exec } = await import('child_process')
-      const { promisify } = await import('util')
-      const execAsync = promisify(exec)
+      const { execSync } = await import('child_process')
       
+      // Simple and reliable: get process with active window
       const script = `
-        Add-Type @"
-        using System;
-        using System.Runtime.InteropServices;
-        using System.Text;
-        public class Win32 {
-          [DllImport("user32.dll")]
-          public static extern IntPtr GetForegroundWindow();
-          [DllImport("user32.dll")]
-          public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
-          [DllImport("user32.dll")]
-          public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-        }
-"@
-        $hwnd = [Win32]::GetForegroundWindow()
-        $title = New-Object System.Text.StringBuilder 256
-        [Win32]::GetWindowText($hwnd, $title, 256) | Out-Null
-        $processId = 0
-        [Win32]::GetWindowThreadProcessId($hwnd, [ref]$processId) | Out-Null
-        $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
-        @{
-          title = $title.ToString()
-          app = if ($process) { $process.ProcessName } else { "Unknown" }
-        } | ConvertTo-Json
-      `
-      
-      const { stdout } = await execAsync(`powershell -Command "${script.replace(/"/g, '\\"')}"`, {
-        timeout: 2000
+$code = @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public class WinAPI {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
+}
+'@
+Add-Type -TypeDefinition $code -Language CSharp
+$h = [WinAPI]::GetForegroundWindow()
+$t = New-Object Text.StringBuilder 512
+[void][WinAPI]::GetWindowText($h, $t, 512)
+$pid = 0
+[void][WinAPI]::GetWindowThreadProcessId($h, [ref]$pid)
+$p = Get-Process -Id $pid -EA 0
+"$($p.ProcessName)|$($t.ToString())"
+`
+      const result = execSync(`powershell -NoProfile -Command "${script.replace(/\r?\n/g, ' ').replace(/"/g, '\\"')}"`, {
+        timeout: 2000,
+        windowsHide: true,
+        encoding: 'utf8'
       })
       
-      const result = JSON.parse(stdout.trim())
-      return { app: result.app, title: result.title }
-    } catch {
+      const [app, title] = result.trim().split('|')
+      if (app && app !== '') {
+        return { app, title: title || '' }
+      }
+      return null
+    } catch (err) {
+      console.error('[ActivityTracker] Windows detection failed:', err)
       return null
     }
   }

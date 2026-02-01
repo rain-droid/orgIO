@@ -924,16 +924,6 @@ export const Mainbar = () => {
 
           {/* Separator */}
           <div className="w-px h-4 bg-black/10 mx-1" />
-
-          <Button
-            variant={chatActive ? 'secondary' : 'ghost'}
-            size="xs"
-            onClick={handleChatClick}
-          >
-            <span>Chat</span>
-            <Command />
-            <CornerDownLeft />
-          </Button>
           
           <Button variant="ghost" size="xs">
             <span>Hide</span>

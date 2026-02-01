@@ -393,16 +393,16 @@ async def analyze_screen(
     # Build context about the project
     project_context = ""
     if request.projectName:
-        project_context += f"Projekt: {request.projectName}\n"
+        project_context += f"Project: {request.projectName}\n"
     if request.projectDescription:
-        project_context += f"Beschreibung: {request.projectDescription}\n"
+        project_context += f"Description: {request.projectDescription}\n"
     if request.currentTasks:
-        project_context += f"Aktuelle Tasks: {', '.join(request.currentTasks[:5])}\n"
+        project_context += f"Current tasks: {', '.join(request.currentTasks[:5])}\n"
     
     # Previous insights to avoid repetition
     previous = ""
     if request.previousInsights:
-        previous = f"\nBereits notiert (NICHT wiederholen): {', '.join(request.previousInsights[-5:])}"
+        previous = f"\nAlready noted (DO NOT repeat): {', '.join(request.previousInsights[-5:])}"
     
     try:
         llm = ChatOpenAI(
@@ -416,22 +416,22 @@ async def analyze_screen(
         messages = [
             {
                 "role": "system",
-                "content": f"""Du bist ein intelligenter Arbeits-Assistent der live mitschreibt was wichtig ist.
-Analysiere den Screenshot und extrahiere NUR wichtige, projektrelevante Informationen.
+                "content": f"""You are an intelligent work assistant that captures important moments in real-time.
+Analyze the screenshot and extract ONLY important, project-relevant information.
 
 {project_context}
 {previous}
 
-REGELN:
-1. Nur NEUE, WICHTIGE Erkenntnisse notieren (Code-Änderungen, Fehler, wichtige UI-Elemente, Entscheidungen)
-2. Maximal 1-2 kurze Stichpunkte auf Deutsch
-3. Wenn nichts Neues/Wichtiges → antworte mit "SKIP"
-4. Keine generischen Beobachtungen ("User arbeitet in VS Code")
-5. Fokus auf: Bugs, TODOs, wichtige Code-Stellen, Fehler, Fortschritte
+RULES:
+1. Only note NEW, IMPORTANT insights (code changes, errors, important UI elements, decisions)
+2. Maximum 1-2 short bullet points in English
+3. If nothing new/important → respond with "SKIP"
+4. No generic observations ("User is working in VS Code")
+5. Focus on: bugs, TODOs, important code sections, errors, progress
 
 FORMAT (JSON):
-{{"bullets": ["Stichpunkt 1", "Stichpunkt 2"]}}
-oder
+{{"bullets": ["bullet 1", "bullet 2"]}}
+or
 {{"skip": true}}"""
             },
             {
@@ -439,7 +439,7 @@ oder
                 "content": [
                     {
                         "type": "text",
-                        "text": "Was ist wichtig auf diesem Screen? Nur relevante Stichpunkte."
+                        "text": "What's important on this screen? Only relevant bullet points."
                     },
                     {
                         "type": "image_url",
@@ -519,26 +519,26 @@ async def get_live_insight(
     total_min = (request.totalDuration or 0) // 60
     
     # Quick AI insight prompt
-    prompt = f"""Du bist ein intelligenter Arbeits-Assistent. Analysiere diese aktuelle Arbeitsaktivität und gib ein kurzes, hilfreiches Update (1-2 Sätze auf Deutsch).
+    prompt = f"""You are an intelligent work assistant. Analyze this current work activity and provide a short, helpful update (1-2 sentences).
 
-AKTIVITÄTEN (letzte Minuten):
+ACTIVITIES (last minutes):
 {activity_text}
 {notes_text}
-Gesamtzeit: ~{total_min} Minuten
+Total time: ~{total_min} minutes
 
-REGELN:
-- Sei kurz und konkret (max 2 Sätze)
-- Erwähne was gerade gemacht wird
-- Gib einen hilfreichen Tipp oder Observation
-- Schreib auf Deutsch
-- Kein JSON, nur natürlicher Text
+RULES:
+- Be brief and specific (max 2 sentences)
+- Mention what's currently being done
+- Give a helpful tip or observation
+- Write in English
+- No JSON, just natural text
 
-Beispiele:
-- "Du arbeitest gerade an der API-Integration. Vergiss nicht die Error-Handler zu testen."
-- "Gute Fortschritte bei den UI-Komponenten! Schon 3 Files bearbeitet."
-- "Viel Zeit in der Doku - vielleicht Zeit für den nächsten Code-Sprint?"
+Examples:
+- "Working on API integration. Don't forget to test the error handlers."
+- "Good progress on UI components! Already edited 3 files."
+- "Lots of time in docs - maybe time for the next code sprint?"
 
-Dein Insight:"""
+Your insight:"""
 
     try:
         llm = ChatOpenAI(
