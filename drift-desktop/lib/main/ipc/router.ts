@@ -270,6 +270,67 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       })
       console.log('[Session] Started tracking activities for role:', role)
       
+      // Start continuous screen analysis
+      currentProjectName = data.briefName || 'Project'
+      currentProjectDescription = null
+      previousInsights = []
+      
+      if (screenAnalysisInterval) {
+        clearInterval(screenAnalysisInterval)
+      }
+      
+      const analyzeScreenPeriodic = async () => {
+        const store = await getStore()
+        const token = store.get('authToken')
+        
+        if (!token || !activityTracker.getStatus().isTracking) return
+        
+        try {
+          const primaryDisplay = screen.getPrimaryDisplay()
+          const sources = await desktopCapturer.getSources({
+            types: ['screen'],
+            thumbnailSize: { width: Math.floor(primaryDisplay.size.width / 3), height: Math.floor(primaryDisplay.size.height / 3) }
+          })
+          
+          if (sources.length === 0) return
+          
+          const screenshot = sources[0].thumbnail.toJPEG(50).toString('base64')
+          
+          const resp = await fetch(`${DRIFT_API_URL}/desktop/session/analyze-screen`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              screenshot,
+              projectName: currentProjectName,
+              previousInsights: previousInsights.slice(-10)
+            })
+          })
+          
+          if (!resp.ok) return
+          
+          const result = await resp.json()
+          
+          if (result.bullets && result.bullets.length > 0 && !result.skip) {
+            previousInsights.push(...result.bullets)
+            if (previousInsights.length > 20) previousInsights = previousInsights.slice(-20)
+            
+            broadcast('session:screen-insight', {
+              bullets: result.bullets,
+              timestamp: Date.now()
+            })
+          }
+        } catch (err) {
+          // Silent fail for screen analysis
+        }
+      }
+      
+      // Analyze screen every 8 seconds
+      screenAnalysisInterval = setInterval(analyzeScreenPeriodic, 8000)
+      setTimeout(analyzeScreenPeriodic, 2000) // First analysis after 2s
+      
       broadcast('session:started', data)
       return data
     } catch (error) {
@@ -281,6 +342,12 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   ipcMain.handle('session:end', async (_evt, _activities?: any[], summary?: string) => {
     if (!activeSessionId) {
       return { error: 'No active session' }
+    }
+    
+    // Stop screen analysis
+    if (screenAnalysisInterval) {
+      clearInterval(screenAnalysisInterval)
+      screenAnalysisInterval = null
     }
     
     const s = await getStore()
@@ -386,6 +453,102 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   
   ipcMain.handle('session:get-status', () => {
     return activityTracker.getStatus()
+  })
+
+  // Continuous screen analysis state
+  let screenAnalysisInterval: NodeJS.Timeout | null = null
+  let previousInsights: string[] = []
+  let currentProjectName: string | null = null
+  let currentProjectDescription: string | null = null
+
+  // Start continuous screen analysis
+  ipcMain.handle('session:start-screen-analysis', async (_evt, projectInfo?: { name: string; description?: string }) => {
+    if (screenAnalysisInterval) {
+      clearInterval(screenAnalysisInterval)
+    }
+    
+    previousInsights = []
+    currentProjectName = projectInfo?.name || null
+    currentProjectDescription = projectInfo?.description || null
+    
+    const analyzeScreen = async () => {
+      const s = await getStore()
+      const authToken = s.get('authToken')
+      
+      if (!authToken || !activityTracker.getStatus().isTracking) {
+        return
+      }
+      
+      try {
+        // Capture current screen
+        const primaryDisplay = screen.getPrimaryDisplay()
+        const sources = await desktopCapturer.getSources({
+          types: ['screen'],
+          thumbnailSize: { width: Math.floor(primaryDisplay.size.width / 3), height: Math.floor(primaryDisplay.size.height / 3) }
+        })
+        
+        if (sources.length === 0) return
+        
+        const screenshot = sources[0].thumbnail.toJPEG(50).toString('base64')
+        
+        // Send to backend for analysis
+        const response = await fetch(`${DRIFT_API_URL}/desktop/session/analyze-screen`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify({
+            screenshot,
+            projectName: currentProjectName,
+            projectDescription: currentProjectDescription,
+            previousInsights: previousInsights.slice(-10)
+          })
+        })
+        
+        if (!response.ok) return
+        
+        const data = await response.json()
+        
+        if (data.bullets && data.bullets.length > 0 && !data.skip) {
+          // Add to previous insights to avoid repetition
+          previousInsights.push(...data.bullets)
+          
+          // Keep only last 20 insights
+          if (previousInsights.length > 20) {
+            previousInsights = previousInsights.slice(-20)
+          }
+          
+          // Broadcast to renderer
+          broadcast('session:screen-insight', {
+            bullets: data.bullets,
+            timestamp: Date.now()
+          })
+          
+          console.log('[ScreenAnalysis] New insights:', data.bullets)
+        }
+      } catch (error) {
+        console.error('[ScreenAnalysis] Error:', error)
+      }
+    }
+    
+    // Run analysis every 10 seconds
+    screenAnalysisInterval = setInterval(analyzeScreen, 10000)
+    
+    // Run immediately
+    analyzeScreen()
+    
+    return { ok: true }
+  })
+
+  // Stop screen analysis
+  ipcMain.handle('session:stop-screen-analysis', () => {
+    if (screenAnalysisInterval) {
+      clearInterval(screenAnalysisInterval)
+      screenAnalysisInterval = null
+    }
+    previousInsights = []
+    return { ok: true }
   })
 
   // Get live AI insight about current session

@@ -63,6 +63,15 @@ class LiveInsightRequest(BaseModel):
     totalDuration: Optional[int] = None  # seconds
 
 
+class ScreenAnalysisRequest(BaseModel):
+    """Request for continuous screen analysis."""
+    screenshot: str  # base64 encoded image
+    projectName: Optional[str] = None
+    projectDescription: Optional[str] = None
+    currentTasks: Optional[List[str]] = None
+    previousInsights: Optional[List[str]] = None  # To avoid repetition
+
+
 @router.post("/desktop/sync")
 async def sync_desktop_state(
     request: DesktopSyncRequest,
@@ -330,6 +339,117 @@ async def end_session(
         "durationMinutes": duration_minutes,
         "summaryLines": summary_lines
     }
+
+
+@router.post("/desktop/session/analyze-screen")
+async def analyze_screen(
+    request: ScreenAnalysisRequest,
+    authorization: str = Header(...)
+):
+    """
+    Analyze a screenshot using Vision AI and extract important points.
+    This runs continuously during a session to capture what's happening.
+    """
+    token = authorization.replace("Bearer ", "")
+    await verify_clerk_token(token)
+    
+    if not request.screenshot:
+        return {"bullets": [], "skip": True}
+    
+    # Build context about the project
+    project_context = ""
+    if request.projectName:
+        project_context += f"Projekt: {request.projectName}\n"
+    if request.projectDescription:
+        project_context += f"Beschreibung: {request.projectDescription}\n"
+    if request.currentTasks:
+        project_context += f"Aktuelle Tasks: {', '.join(request.currentTasks[:5])}\n"
+    
+    # Previous insights to avoid repetition
+    previous = ""
+    if request.previousInsights:
+        previous = f"\nBereits notiert (NICHT wiederholen): {', '.join(request.previousInsights[-5:])}"
+    
+    try:
+        llm = ChatOpenAI(
+            model="gpt-4o",
+            temperature=0.3,
+            max_tokens=200,
+            api_key=settings.OPENAI_API_KEY
+        )
+        
+        # Vision prompt
+        messages = [
+            {
+                "role": "system",
+                "content": f"""Du bist ein intelligenter Arbeits-Assistent der live mitschreibt was wichtig ist.
+Analysiere den Screenshot und extrahiere NUR wichtige, projektrelevante Informationen.
+
+{project_context}
+{previous}
+
+REGELN:
+1. Nur NEUE, WICHTIGE Erkenntnisse notieren (Code-Änderungen, Fehler, wichtige UI-Elemente, Entscheidungen)
+2. Maximal 1-2 kurze Stichpunkte auf Deutsch
+3. Wenn nichts Neues/Wichtiges → antworte mit "SKIP"
+4. Keine generischen Beobachtungen ("User arbeitet in VS Code")
+5. Fokus auf: Bugs, TODOs, wichtige Code-Stellen, Fehler, Fortschritte
+
+FORMAT (JSON):
+{{"bullets": ["Stichpunkt 1", "Stichpunkt 2"]}}
+oder
+{{"skip": true}}"""
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Was ist wichtig auf diesem Screen? Nur relevante Stichpunkte."
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{request.screenshot}",
+                            "detail": "low"  # Use low detail for speed
+                        }
+                    }
+                ]
+            }
+        ]
+        
+        response = await llm.ainvoke(messages)
+        content = response.content.strip()
+        
+        # Parse response
+        if "SKIP" in content.upper() or '"skip"' in content.lower():
+            return {"bullets": [], "skip": True}
+        
+        # Try to parse JSON
+        try:
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            
+            result = json.loads(content)
+            bullets = result.get("bullets", [])
+            
+            # Filter out empty or too short bullets
+            bullets = [b for b in bullets if b and len(b) > 5]
+            
+            return {"bullets": bullets[:2], "skip": False}  # Max 2 bullets
+            
+        except json.JSONDecodeError:
+            # If not JSON, try to extract bullet points
+            if content and not content.upper().startswith("SKIP"):
+                lines = [l.strip().lstrip("•-* ") for l in content.split("\n") if l.strip()]
+                return {"bullets": lines[:2], "skip": False}
+            return {"bullets": [], "skip": True}
+        
+    except Exception as e:
+        print(f"Screen analysis error: {e}")
+        return {"bullets": [], "skip": True, "error": str(e)}
 
 
 @router.post("/desktop/session/live-insight")

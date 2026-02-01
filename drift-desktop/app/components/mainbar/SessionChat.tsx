@@ -13,7 +13,7 @@ interface ActivityEntry {
 }
 
 interface SessionMessage {
-  type: 'activity' | 'note' | 'system' | 'summary' | 'ai_insight'
+  type: 'activity' | 'note' | 'system' | 'summary' | 'ai_insight' | 'auto_bullet'
   content: string
   timestamp: number
   app?: string
@@ -22,6 +22,7 @@ interface SessionMessage {
   isRelevant?: boolean
   summaryData?: SessionSummaryData
   id?: string // For deletion
+  bullets?: string[] // For auto_bullet type
 }
 
 interface SessionSummaryData {
@@ -81,7 +82,7 @@ export function SessionChat({ isVisible, onClose, sessionSummary, onAddToWorkspa
     }
   }, [isLoadingInsight])
 
-  // Listen for live activity updates
+  // Listen for live activity updates and screen insights
   useEffect(() => {
     const handleActivity = (activity: ActivityEntry) => {
       setLastActivity(activity)
@@ -120,22 +121,37 @@ export function SessionChat({ isVisible, onClose, sessionSummary, onAddToWorkspa
       }
     }
 
+    // Handle live screen insights (auto-generated bullet points)
+    const handleScreenInsight = (data: { bullets: string[]; timestamp: number }) => {
+      if (data.bullets && data.bullets.length > 0) {
+        setMessages(prev => [...prev, {
+          type: 'auto_bullet',
+          content: data.bullets.join(' • '),
+          bullets: data.bullets,
+          timestamp: data.timestamp,
+          id: `auto-${data.timestamp}`
+        }])
+      }
+    }
+
     window.api.receive('session:activity', handleActivity)
+    window.api.receive('session:screen-insight', handleScreenInsight)
     
     // Add initial system message
     setMessages([{
       type: 'system',
-      content: '🤖 Session gestartet. KI analysiert live was du machst.',
+      content: '🤖 Session gestartet. KI analysiert deinen Screen live und notiert Wichtiges.',
       timestamp: Date.now()
     }])
 
-    // Periodic AI insight (every 60 seconds)
+    // Periodic AI insight (every 60 seconds) - now less frequent since we have screen analysis
     const insightInterval = setInterval(() => {
       generateAIInsight()
-    }, 60000)
+    }, 90000)
 
     return () => {
       window.api.removeAllListeners('session:activity')
+      window.api.removeAllListeners('session:screen-insight')
       clearInterval(insightInterval)
     }
   }, [generateAIInsight])
@@ -328,6 +344,29 @@ export function SessionChat({ isVisible, onClose, sessionSummary, onAddToWorkspa
                         </span>
                       </div>
                       <span className="text-purple-900">{msg.content}</span>
+                    </div>
+                  </div>
+                )}
+                {msg.type === 'auto_bullet' && msg.bullets && (
+                  <div className="flex items-start gap-2 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg p-2 border border-amber-200 shadow-sm">
+                    <div className="w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center flex-shrink-0">
+                      <Sparkles size={10} className="text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">📝 Auto-Notiz</span>
+                        <span className="text-[10px] text-amber-500">
+                          {formatTime(msg.timestamp)}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        {msg.bullets.map((bullet, idx) => (
+                          <div key={idx} className="flex items-start gap-1.5 text-amber-900">
+                            <span className="text-amber-500 mt-0.5">•</span>
+                            <span className="font-medium">{bullet}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
