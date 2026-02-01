@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@clerk/clerk-react'
-import { api } from '@/lib/api'
 import type { Brief, Role } from '@/types'
 import { 
   ArrowLeft, 

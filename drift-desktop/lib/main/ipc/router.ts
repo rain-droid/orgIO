@@ -664,7 +664,9 @@ export function registerIpcHandlers(ctx: IpcContext): void {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authToken}`
         },
-        body: JSON.stringify({})
+        body: JSON.stringify({
+          userId: 'from-token' // Backend extracts real userId from token
+        })
       })
       
       if (!response.ok) {
