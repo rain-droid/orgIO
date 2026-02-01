@@ -232,6 +232,11 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   let activeSessionBriefName: string | null = null
 
   ipcMain.handle('session:start', async (_evt, briefId: string, role: string) => {
+    // Check if session already active
+    if (activeSessionId) {
+      return { error: 'Session already active', sessionId: activeSessionId }
+    }
+    
     const s = await getStore()
     const authToken = s.get('authToken')
     
@@ -252,18 +257,19 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       })
       
       const data = response.data
+      
+      // ONLY set state after successful response
       activeSessionId = data.sessionId
       activeSessionBriefId = data.briefId || briefId
       activeSessionBriefName = data.briefName || 'Project'
       
-      // Start activity tracking with live updates
+      // NOW start tracking
       activityTracker.start(role, (activity) => {
-        // Broadcast live activity updates to renderer
         broadcast('session:activity', activity)
       })
       console.log('[Session] Started tracking activities for role:', role)
       
-      // Start continuous screen analysis
+      // Start continuous screen analysis AFTER session confirmed
       currentProjectName = data.briefName || 'Project'
       currentProjectDescription = null
       previousInsights = []
@@ -323,10 +329,18 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       
       broadcast('session:started', data)
       return data
+      
     } catch (error: any) {
+      // Cleanup on error
+      activeSessionId = null
+      activeSessionBriefId = null
+      activeSessionBriefName = null
+      
       console.error('Session start error:', error.message)
       if (error.response) {
         return { error: `API Error: ${error.response.status} - ${JSON.stringify(error.response.data)}` }
+      } else if (error.request) {
+        return { error: 'Keine Verbindung zum Server möglich' }
       }
       return { error: error.message || String(error) }
     }
@@ -390,26 +404,20 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         screenshot: a.screenshot // Include screenshot if captured
       }))
       
-      const response = await fetch(`${DRIFT_API_URL}/desktop/session/end`, {
-        method: 'POST',
+      const response = await axios.post(`${DRIFT_API_URL}/desktop/session/end`, {
+        sessionId: activeSessionId,
+        activities: apiActivities,
+        notes: notes.map(n => n.text),
+        summary: generatedSummary
+      }, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authToken}`
         },
-        body: JSON.stringify({
-          sessionId: activeSessionId,
-          activities: apiActivities,
-          notes: notes.map(n => n.text),
-          summary: generatedSummary
-        })
+        timeout: 15000
       })
       
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Session end failed: ${response.status} - ${errorText}`)
-      }
-      
-      const data = await response.json()
+      const data = response.data
       const briefId = activeSessionBriefId
       const briefName = activeSessionBriefName
       activeSessionId = null
@@ -417,7 +425,37 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       activeSessionBriefName = null
       broadcast('session:ended', { ...data, activitySummary, notes, briefId, briefName })
       return { ...data, activitySummary, notes, briefId, briefName }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Session end error:', error.message)
+      
+      // Cleanup screen analysis even on error
+      if (screenAnalysisInterval) {
+        clearInterval(screenAnalysisInterval)
+        screenAnalysisInterval = null
+      }
+      
+      // Stop activity tracking
+      activityTracker.stop()
+      
+      // Reset session state
+      const briefId = activeSessionBriefId
+      const briefName = activeSessionBriefName
+      activeSessionId = null
+      activeSessionBriefId = null
+      activeSessionBriefName = null
+      
+      // Provide detailed error
+      if (error.code === 'ECONNABORTED') {
+        return { error: 'Request timeout - server nicht erreichbar', briefId, briefName }
+      } else if (error.response) {
+        return { error: `Server error: ${error.response.status}`, briefId, briefName }
+      } else if (error.request) {
+        return { error: 'Keine Verbindung zum Server', briefId, briefName }
+      }
+      
+      return { error: String(error.message || error), briefId, briefName }
+    }
+  })
       console.error('Session end error:', error)
       return { error: String(error) }
     }

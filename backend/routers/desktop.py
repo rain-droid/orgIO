@@ -183,7 +183,7 @@ async def start_session(
     
     # Verify brief exists and user has access
     brief_result = supabase.table("briefs")\
-        .select("id, name, org_id")\
+        .select("id, name, org_id, created_by")\
         .eq("id", request.briefId)\
         .single()\
         .execute()
@@ -191,7 +191,20 @@ async def start_session(
     if not brief_result.data:
         raise HTTPException(status_code=404, detail="Brief not found")
     
-    if brief_result.data.get("org_id") != org_id:
+    brief = brief_result.data
+    
+    # Check access: user must be creator OR in same org
+    has_access = False
+    if brief.get("created_by") == user_id:
+        has_access = True
+    elif org_id and brief.get("org_id") == org_id:
+        has_access = True
+    elif not org_id and not brief.get("org_id"):
+        # Both have no org - allow if user created it
+        has_access = brief.get("created_by") == user_id
+    
+    if not has_access:
+        print(f"[Session] Access denied: user={user_id}, org={org_id}, brief_org={brief.get('org_id')}, brief_creator={brief.get('created_by')}")
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Create session in DB
