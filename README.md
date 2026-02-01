@@ -274,3 +274,6 @@ MIT
 <p align="center">
   <strong>Built for teams who want to ship, not sync.</strong>
 </p>
+
+Note: We did not manage to implement key features of our project
+
