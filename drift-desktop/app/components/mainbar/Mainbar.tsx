@@ -334,9 +334,12 @@ export const Mainbar = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  const [syncError, setSyncError] = useState<string | null>(null)
+
   // Fetch projects from API on mount
   const fetchProjects = useCallback(async () => {
     setIsLoadingProjects(true)
+    setSyncError(null)
     try {
       const result = await window.api.invoke('drift:sync')
       if (result && !result.error) {
@@ -346,9 +349,17 @@ export const Mainbar = () => {
         if (!selectedProject && result.briefs?.length > 0) {
           setSelectedProject(result.briefs[0].id)
         }
+      } else if (result?.error) {
+        console.error('Sync error:', result.error)
+        if (result.error.includes('Not authenticated')) {
+          setSyncError('auth')
+        } else {
+          setSyncError('error')
+        }
       }
     } catch (error) {
       console.error('Failed to fetch projects:', error)
+      setSyncError('error')
     } finally {
       setIsLoadingProjects(false)
     }
@@ -620,8 +631,10 @@ export const Mainbar = () => {
     return project?.name || (isLoadingProjects ? 'Loading...' : 'Select Project')
   }
 
-  const handleLogout = () => {
-    window.api.invoke('store-auth-token', null)
+  const handleLogout = async () => {
+    console.log('[Logout] Clearing auth token...')
+    await window.api.invoke('store-auth-token', null)
+    console.log('[Logout] Token cleared, reloading...')
     window.location.reload()
   }
 
@@ -745,9 +758,23 @@ export const Mainbar = () => {
         <span>{isLoadingProjects ? 'Loading...' : 'Refresh projects'}</span>
       </button>
       <div className="h-px bg-black/10 my-1" />
-      {projects.length === 0 ? (
+      {syncError === 'auth' ? (
         <div className="px-2.5 py-2 text-xs text-gray-500 text-center">
-          No projects found.<br />Create one in the web app.
+          <span className="text-amber-600">Not logged in.</span><br />
+          Restart the app to connect.
+        </div>
+      ) : projects.length === 0 ? (
+        <div className="px-2.5 py-2 text-xs text-gray-500 text-center">
+          No projects found.<br />
+          <button 
+            onClick={() => {
+              const webUrl = process.env.DRIFT_WEB_URL || 'https://test.usehavoc.com'
+              window.open(webUrl, '_blank')
+            }}
+            className="text-blue-500 hover:underline"
+          >
+            Create one in the web app →
+          </button>
         </div>
       ) : (
         projects.map((project) => (

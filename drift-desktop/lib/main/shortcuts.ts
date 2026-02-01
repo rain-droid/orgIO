@@ -95,6 +95,12 @@ export class ShortcutsHelper {
   // Register shortcuts only when windows are visible
   private registerWindowShortcuts(): ShortcutAction[] {
     const failed: ShortcutAction[] = []
+
+    // F12: toggle DevTools for debugging
+    globalShortcut.register('F12', () => {
+      this.mainWindow?.webContents.toggleDevTools()
+    })
+
     // Enter: open or submit in chat
     if (!globalShortcut.register(this.shortcuts.submitChat, () => {
       this.mainWindow?.webContents.send('shortcut:ctrl-enter');
@@ -135,5 +141,6 @@ export class ShortcutsHelper {
     globalShortcut.unregister(this.shortcuts.toggleSession);
     globalShortcut.unregister(this.shortcuts.toggleVoice);
     globalShortcut.unregister(this.shortcuts.escape);
+    globalShortcut.unregister('F12');
   }
 }

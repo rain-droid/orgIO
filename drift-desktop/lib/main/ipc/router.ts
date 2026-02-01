@@ -650,12 +650,16 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   /* ---------------- Sync with Drift backend ---------------- */
   ipcMain.handle('drift:sync', async () => {
+    console.log('[drift:sync] Starting sync...')
     const s = await getStore()
     const authToken = s.get('authToken')
     
     if (!authToken) {
+      console.log('[drift:sync] ❌ No auth token found')
       return { error: 'Not authenticated' }
     }
+    
+    console.log('[drift:sync] Auth token found, calling API:', DRIFT_API_URL)
     
     try {
       const response = await fetch(`${DRIFT_API_URL}/desktop/sync`, {
@@ -669,15 +673,23 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         })
       })
       
+      console.log('[drift:sync] Response status:', response.status)
+      
       if (!response.ok) {
-        throw new Error(`Sync failed: ${response.status}`)
+        const errorText = await response.text()
+        console.log('[drift:sync] ❌ API error:', response.status, errorText)
+        throw new Error(`Sync failed: ${response.status} - ${errorText}`)
       }
       
       const data = await response.json()
+      console.log('[drift:sync] ✅ Success! Briefs:', data.briefs?.length || 0, 'Role:', data.role)
+      if (data.briefs?.length > 0) {
+        console.log('[drift:sync] Projects:', data.briefs.map((b: any) => b.name).join(', '))
+      }
       broadcast('drift:synced', data)
       return data
     } catch (error) {
-      console.error('Drift sync error:', error)
+      console.error('[drift:sync] ❌ Error:', error)
       return { error: String(error) }
     }
   })
