@@ -67,12 +67,7 @@ export default function App() {
     const checkUser = async () => {
       setCheckingUser(true)
       try {
-        let token: string | null = null
-        for (let i = 0; i < 5; i++) {
-          token = await getToken({ skipCache: true })
-          if (token) break
-          await new Promise(r => setTimeout(r, 500))
-        }
+        const token = await getToken()
         if (!token) {
           setNeedsOnboarding(true)
           setCheckingUser(false)
@@ -131,16 +126,11 @@ export default function App() {
   }, [isSignedIn, clerkUser, orgId, getToken])
 
   const handleOnboardingComplete = async () => {
-    if (!clerkUser || !orgId) return
+    if (!clerkUser) return
     setNeedsOnboarding(false)
     setCheckingUser(true)
     try {
-      let token: string | null = null
-      for (let i = 0; i < 5; i++) {
-        token = await getToken({ skipCache: true })
-        if (token) break
-        await new Promise(r => setTimeout(r, 500))
-      }
+      const token = await getToken({ skipCache: true })
       if (!token) throw new Error('Unable to get authentication token')
       api.setToken(token)
       const session = await api.getSession()

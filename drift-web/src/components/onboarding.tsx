@@ -32,7 +32,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       const org = await createOrganization({ name: orgName })
       selectedOrgIdRef.current = org.id
       await setActive?.({ organization: org.id })
-      await new Promise(r => setTimeout(r, 500))
       setStep('role')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create organization')
@@ -46,7 +45,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     try {
       selectedOrgIdRef.current = selectedOrgId
       await setActive?.({ organization: selectedOrgId })
-      await new Promise(r => setTimeout(r, 300))
       setStep('role')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to select organization')
@@ -61,25 +59,14 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setLoading(true)
     setError(null)
     try {
-      let token: string | null = null
-      for (let i = 0; i < 3; i++) {
-        token = await getToken({ skipCache: true })
-        if (token) break
-        await new Promise(r => setTimeout(r, 300))
-      }
-      
+      const token = await getToken({ skipCache: true })
       if (!token) {
-        throw new Error('Unable to get authentication token. Please try again.')
+        throw new Error('Unable to get authentication token.')
       }
       
       api.setToken(token)
-      
-      // Use org from ref (selected during this session) or from Clerk hook
       const finalOrgId = selectedOrgIdRef.current || orgId
-      
-      // Save user with role AND org_id to database
       await api.updateUserRole(role, finalOrgId || undefined)
-      
       onComplete()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save role')
