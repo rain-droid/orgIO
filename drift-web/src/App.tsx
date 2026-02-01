@@ -21,10 +21,11 @@ import {
   Trash2, 
   CheckCircle, 
   Clock,
-  MoreHorizontal,
   Code,
   Palette,
   LayoutGrid,
+  FolderOpen,
+  TrendingUp,
 } from 'lucide-react'
 
 type View = 'home' | 'brief' | 'briefs' | 'reviews' | 'planning'
@@ -53,17 +54,11 @@ export default function App() {
   const currentRole: Role = driftUser?.role || 'dev'
 
   useEffect(() => {
-    // Don't run if already completed onboarding this session
-    if (needsOnboarding === false && driftUser?.role) {
-      return
-    }
-    
+    if (needsOnboarding === false && driftUser?.role) return
     if (!isSignedIn || !clerkUser) {
       setCheckingUser(false)
       return
     }
-    
-    // If no org, show onboarding but don't make API calls
     if (!orgId) {
       setCheckingUser(false)
       setNeedsOnboarding(true)
@@ -73,46 +68,33 @@ export default function App() {
     const checkUser = async () => {
       setCheckingUser(true)
       try {
-        // Wait for fresh token with org context
         let token: string | null = null
         for (let i = 0; i < 5; i++) {
           token = await getToken({ skipCache: true })
           if (token) break
           await new Promise(r => setTimeout(r, 500))
         }
-        
         if (!token) {
           setNeedsOnboarding(true)
           setCheckingUser(false)
           return
         }
-        
         api.setToken(token)
-
         const session = await api.getSession()
-        
         setDriftUser({
           id: session.userId,
-          orgId: session.orgId || orgId, // Use Clerk's orgId as fallback
+          orgId: session.orgId || orgId,
           email: session.email || '',
           name: session.name || 'User',
           avatarUrl: session.avatarUrl,
           role: session.role,
         })
-
-        // Show onboarding if:
-        // 1. User is new (first time ever)
-        // 2. User never completed role selection (role is null)
-        // Backend now sends needsOnboarding flag
         if (session.needsOnboarding || session.isNew || !session.role) {
           setNeedsOnboarding(true)
           setCheckingUser(false)
           return
         }
-        
-        // User exists and has a role - don't show onboarding
         setNeedsOnboarding(false)
-
         const briefsResponse = await api.listBriefs()
         const briefsData = briefsResponse.briefs.map((brief) => ({
           id: brief.id,
@@ -124,7 +106,6 @@ export default function App() {
           content: null,
         }))
         setBriefs(briefsData)
-
         if (briefsData.length > 0) {
           const subsResponse = await api.listSubmissions()
           const subsData = subsResponse.submissions.map((submission) => ({
@@ -142,10 +123,7 @@ export default function App() {
         }
       } catch (err) {
         console.error('checkUser error:', err)
-        // Only show onboarding on error if user doesn't exist yet
-        if (!driftUser) {
-          setNeedsOnboarding(true)
-        }
+        if (!driftUser) setNeedsOnboarding(true)
       } finally {
         setCheckingUser(false)
       }
@@ -158,18 +136,13 @@ export default function App() {
     setNeedsOnboarding(false)
     setCheckingUser(true)
     try {
-      // Wait for fresh token with org context
       let token: string | null = null
       for (let i = 0; i < 5; i++) {
         token = await getToken({ skipCache: true })
         if (token) break
         await new Promise(r => setTimeout(r, 500))
       }
-      
-      if (!token) {
-        throw new Error('Unable to get authentication token')
-      }
-      
+      if (!token) throw new Error('Unable to get authentication token')
       api.setToken(token)
       const session = await api.getSession()
       setDriftUser({
@@ -204,7 +177,6 @@ export default function App() {
   }
 
   const handlePlanningComplete = async (projectId: string) => {
-    // Refresh briefs list
     try {
       const briefsResponse = await api.listBriefs()
       const briefsData = briefsResponse.briefs.map((brief) => ({
@@ -217,8 +189,6 @@ export default function App() {
         content: null,
       }))
       setBriefs(briefsData)
-      
-      // Find and select the new brief
       const newBrief = briefsData.find(b => b.id === projectId)
       if (newBrief) {
         setSelectedBrief(newBrief)
@@ -268,73 +238,76 @@ export default function App() {
     avatar: clerkUser.imageUrl,
   } : undefined
 
-  const roleColor = currentRole === 'pm' ? 'text-blue-400' : currentRole === 'dev' ? 'text-emerald-400' : 'text-violet-400'
-  const roleBg = currentRole === 'pm' ? 'bg-blue-500/10' : currentRole === 'dev' ? 'bg-emerald-500/10' : 'bg-violet-500/10'
-  
-  const RoleIcon = () => {
-    const iconClass = `size-3.5 ${roleColor}`
-    if (currentRole === 'pm') return <LayoutGrid className={iconClass} />
-    if (currentRole === 'dev') return <Code className={iconClass} />
-    return <Palette className={iconClass} />
+  const RoleIcon = ({ className = "size-4" }: { className?: string }) => {
+    if (currentRole === 'pm') return <LayoutGrid className={className} />
+    if (currentRole === 'dev') return <Code className={className} />
+    return <Palette className={className} />
   }
 
-  // Not signed in
+  // Not signed in - Landing
   if (!isSignedIn) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center hero-bg relative overflow-hidden">
-        {/* Decorative gradient orbs */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl" />
-        
-        <div className="relative text-center space-y-10 animate-slideUp px-6">
-          <div className="space-y-4">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-sm text-primary font-medium mb-4">
-              <Sparkles className="size-4" />
-              AI-Powered Product Specs
+      <div className="min-h-screen bg-background flex flex-col">
+        {/* Header */}
+        <header className="border-b">
+          <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="size-8 bg-foreground rounded flex items-center justify-center">
+                <Sparkles className="size-4 text-background" />
+              </div>
+              <span className="font-semibold">Drift</span>
             </div>
-            <h1 className="text-6xl md:text-7xl font-bold tracking-tight">
-              Drift
-            </h1>
-            <p className="text-xl text-muted-foreground max-w-md mx-auto">
-              One project. Three views. Zero meetings.
-            </p>
-          </div>
-          <div className="space-y-4">
             <SignInButton mode="modal">
-              <Button size="lg" className="h-14 px-10 text-base font-semibold shadow-lg hover:shadow-xl transition-all">
-                Start Building <ArrowRight className="ml-2 size-5" />
-              </Button>
+              <button className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Sign in
+              </button>
             </SignInButton>
-            <p className="text-sm text-muted-foreground">
-              Free for teams up to 5 members
+          </div>
+        </header>
+
+        {/* Hero */}
+        <main className="flex-1 flex items-center justify-center px-6">
+          <div className="max-w-2xl mx-auto text-center space-y-8">
+            <div className="space-y-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                AI-Powered Sprint Planning
+              </p>
+              <h1 className="text-4xl md:text-5xl font-semibold tracking-tight">
+                One project.<br />Three views.<br />Zero meetings.
+              </h1>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                Describe what you're building. Get instant specs for PM, Dev, and Design.
+              </p>
+            </div>
+            <SignInButton mode="modal">
+              <button className="btn-primary px-8 py-3 rounded text-sm font-medium inline-flex items-center gap-2">
+                Start Building <ArrowRight className="size-4" />
+              </button>
+            </SignInButton>
+            <p className="text-xs text-muted-foreground">
+              Free for teams up to 5
             </p>
           </div>
-        </div>
+        </main>
       </div>
     )
   }
 
+  // Loading
   if (checkingUser) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
       </div>
     )
   }
 
-  // Show onboarding if:
-  // 1. needsOnboarding flag is set, OR
-  // 2. User exists but has no role (null)
-  if (needsOnboarding || (driftUser && !driftUser.role)) {
-    return <Onboarding onComplete={handleOnboardingComplete} />
-  }
-  
-  // Also show onboarding if no org is selected
-  if (!orgId) {
+  // Onboarding
+  if (needsOnboarding || (driftUser && !driftUser.role) || !orgId) {
     return <Onboarding onComplete={handleOnboardingComplete} />
   }
 
-  // Planning View - Full screen Cursor-style planning
+  // Planning View
   if (currentView === 'planning' && planningProjectName) {
     return (
       <PlanningView
@@ -345,7 +318,7 @@ export default function App() {
     )
   }
 
-  // Brief Page - Full screen without sidebar
+  // Brief/Project View
   if (currentView === 'brief' && selectedBrief) {
     return (
       <ProjectWorkspace 
@@ -355,6 +328,10 @@ export default function App() {
       />
     )
   }
+
+  const activeBriefs = briefs.filter(b => b.status === 'active')
+  const pendingSubmissions = submissions.filter(s => s.status === 'pending')
+  const approvedSubmissions = submissions.filter(s => s.status === 'approved')
 
   return (
     <SidebarProvider>
@@ -367,169 +344,166 @@ export default function App() {
         userRole={currentRole}
       />
       <SidebarInset className="flex flex-col">
-        {/* Minimal Header */}
-        <header className="h-12 flex items-center px-4 border-b border-border/50">
+        {/* Header */}
+        <header className="h-14 flex items-center px-4 border-b">
           <SidebarTrigger className="size-8" />
           <div className="flex-1" />
-          <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${roleBg}`}>
-            <RoleIcon />
-            <span className={`text-xs font-medium ${roleColor}`}>{currentRole.toUpperCase()}</span>
+          <div className="flex items-center gap-2 px-3 py-1.5 border rounded text-xs font-medium uppercase tracking-wide">
+            <RoleIcon className="size-3.5" />
+            {currentRole}
           </div>
           <div className="ml-4">
             <UserButton afterSignOutUrl="/" />
           </div>
         </header>
 
-        {/* Main Content */}
         <main className="flex-1 overflow-auto">
-          {/* HOME VIEW */}
+          {/* HOME */}
           {currentView === 'home' && (
-            <div className="p-6 space-y-6 animate-fadeIn">
-              {/* Input Section - Top */}
-              <div className="relative bg-card border border-border rounded-lg p-4 input-glow transition-all">
-                <input
-                  type="text"
-                  placeholder="Plan a new project for Drift to handle..."
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleStartPlanning()}
-                  className="w-full bg-transparent text-base placeholder:text-muted-foreground/50 focus:outline-none"
-                />
-                <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/50">
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <span>Role</span>
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${roleBg} ${roleColor}`}>
-                      {currentRole.toUpperCase()}
-                    </span>
+            <div className="space-y-6 px-4 pb-6 pt-14">
+              {/* Header */}
+              <div>
+                <h2 className="text-xl font-semibold">Overview</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Your sprint planning at a glance
+                </p>
+              </div>
+
+              {/* Stats Grid - L-bracket style */}
+              <div className="relative">
+                <div aria-hidden className="absolute top-0 left-0 w-2.5 h-2.5 border-l-2 border-t-2 border-foreground/50" />
+                <div aria-hidden className="absolute top-0 right-0 w-2.5 h-2.5 border-r-2 border-t-2 border-foreground/50" />
+                <div aria-hidden className="absolute bottom-0 left-0 w-2.5 h-2.5 border-l-2 border-b-2 border-foreground/50" />
+                <div aria-hidden className="absolute bottom-0 right-0 w-2.5 h-2.5 border-r-2 border-b-2 border-foreground/50" />
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 divide-x border bg-background">
+                  <div className="p-6 space-y-1 card-hover">
+                    <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                      <FolderOpen className="size-4" />
+                      <span className="text-xs font-medium uppercase tracking-wide">Projects</span>
+                    </div>
+                    <div className="text-3xl font-medium">{briefs.length}</div>
+                    <p className="text-muted-foreground text-xs">{activeBriefs.length} active</p>
                   </div>
-                  <Button
-                    onClick={handleStartPlanning}
-                    disabled={!inputValue.trim() || loading}
-                    size="sm"
-                    className="h-8"
-                  >
-                    {loading ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-                  </Button>
+                  <div className="p-6 space-y-1 card-hover">
+                    <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                      <Clock className="size-4" />
+                      <span className="text-xs font-medium uppercase tracking-wide">Pending</span>
+                    </div>
+                    <div className="text-3xl font-medium">{pendingSubmissions.length}</div>
+                    <p className="text-muted-foreground text-xs">awaiting review</p>
+                  </div>
+                  <div className="p-6 space-y-1 card-hover max-lg:border-t max-lg:border-l-0">
+                    <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                      <CheckCircle className="size-4" />
+                      <span className="text-xs font-medium uppercase tracking-wide">Completed</span>
+                    </div>
+                    <div className="text-3xl font-medium">{approvedSubmissions.length}</div>
+                    <p className="text-muted-foreground text-xs">submissions approved</p>
+                  </div>
+                  <div className="p-6 space-y-1 card-hover max-lg:border-t">
+                    <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                      <RoleIcon className="size-4" />
+                      <span className="text-xs font-medium uppercase tracking-wide">Your Role</span>
+                    </div>
+                    <div className="text-3xl font-medium uppercase">{currentRole}</div>
+                    <p className="text-muted-foreground text-xs">current perspective</p>
+                  </div>
                 </div>
               </div>
 
-              {/* Two Column Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Active Briefs Column */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <h2 className="font-semibold">Active Projects</h2>
-                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                        {briefs.filter(b => b.status === 'active').length}
-                      </span>
+              {/* New Project Input */}
+              <div className="relative">
+                <div aria-hidden className="absolute top-0 left-0 w-2.5 h-2.5 border-l-2 border-t-2 border-foreground/50" />
+                <div aria-hidden className="absolute top-0 right-0 w-2.5 h-2.5 border-r-2 border-t-2 border-foreground/50" />
+                <div aria-hidden className="absolute bottom-0 left-0 w-2.5 h-2.5 border-l-2 border-b-2 border-foreground/50" />
+                <div aria-hidden className="absolute bottom-0 right-0 w-2.5 h-2.5 border-r-2 border-b-2 border-foreground/50" />
+
+                <div className="border bg-background p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-sm font-medium">New Project</h3>
+                      <p className="text-xs text-muted-foreground mt-1">Describe what you want to build</p>
                     </div>
-                    <button className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                      All <ArrowRight className="size-3" />
+                    <Sparkles className="size-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex gap-3">
+                    <input
+                      type="text"
+                      placeholder="e.g. Build a customer feedback portal..."
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleStartPlanning()}
+                      className="flex-1 bg-transparent border rounded px-4 py-3 text-sm placeholder:text-muted-foreground/50 input-focus"
+                    />
+                    <button
+                      onClick={handleStartPlanning}
+                      disabled={!inputValue.trim() || loading}
+                      className="btn-primary px-6 py-3 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loading ? <Loader2 className="size-4 animate-spin" /> : 'Plan'}
                     </button>
                   </div>
-                  <div className="space-y-2">
-                    {briefs.filter(b => b.status === 'active').slice(0, 5).map(brief => (
-                      <div
-                        key={brief.id}
-                        className="group flex items-center gap-3 p-3 bg-card border border-border rounded-lg hover:border-primary/50 cursor-pointer transition-all"
-                        onClick={() => handleBriefSelect(brief)}
-                      >
-                        <div className="size-2 rounded-full bg-emerald-500 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium truncate">{brief.name}</div>
-                          <div className="text-xs text-muted-foreground">Just now</div>
-                        </div>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm(brief.id); }}
-                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-all"
-                        >
-                          <MoreHorizontal className="size-4 text-muted-foreground" />
-                        </button>
-                      </div>
-                    ))}
-                    {briefs.filter(b => b.status === 'active').length === 0 && (
-                      <div className="p-8 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">
-                        No active projects yet
-                      </div>
-                    )}
-                  </div>
                 </div>
+              </div>
 
-                {/* Pending Reviews Column */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <h2 className="font-semibold">Pending Reviews</h2>
-                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                        {submissions.filter(s => s.status === 'pending').length}
-                      </span>
+              {/* Recent Projects */}
+              <div className="relative">
+                <div aria-hidden className="absolute top-0 left-0 w-2.5 h-2.5 border-l-2 border-t-2 border-foreground/50" />
+                <div aria-hidden className="absolute top-0 right-0 w-2.5 h-2.5 border-r-2 border-t-2 border-foreground/50" />
+                <div aria-hidden className="absolute bottom-0 left-0 w-2.5 h-2.5 border-l-2 border-b-2 border-foreground/50" />
+                <div aria-hidden className="absolute bottom-0 right-0 w-2.5 h-2.5 border-r-2 border-b-2 border-foreground/50" />
+
+                <div className="border bg-background">
+                  <div className="p-6 border-b flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-medium">Recent Projects</h3>
+                      <p className="text-xs text-muted-foreground mt-1">Your active work</p>
                     </div>
                     <button 
-                      onClick={() => setCurrentView('reviews')}
+                      onClick={() => setCurrentView('briefs')}
                       className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
                     >
-                      All <ArrowRight className="size-3" />
+                      View all <ArrowRight className="size-3" />
                     </button>
                   </div>
-                  <div className="space-y-2">
-                    {submissions.filter(s => s.status === 'pending').slice(0, 5).map(sub => (
-                      <div
-                        key={sub.id}
-                        className="group flex items-center gap-3 p-3 bg-card border border-border rounded-lg hover:border-yellow-500/50 cursor-pointer transition-all"
-                        onClick={() => setCurrentView('reviews')}
-                      >
-                        <div className="size-2 rounded-full bg-yellow-500 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium truncate">{sub.userName}</div>
-                          <div className="text-xs text-muted-foreground">{sub.role.toUpperCase()} • {sub.durationMinutes}m</div>
-                        </div>
-                        <span className="text-xs text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded">
-                          Pending
-                        </span>
-                      </div>
-                    ))}
-                    {submissions.filter(s => s.status === 'pending').length === 0 && (
-                      <div className="p-8 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">
-                        No pending reviews
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
 
-              {/* Completed Section */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-semibold">Completed</h2>
-                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                      {submissions.filter(s => s.status === 'approved').length}
-                    </span>
-                  </div>
-                  <button 
-                    onClick={() => setCurrentView('reviews')}
-                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                  >
-                    All <ArrowRight className="size-3" />
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {submissions.filter(s => s.status === 'approved').slice(0, 6).map(sub => (
-                    <div
-                      key={sub.id}
-                      className="flex items-center gap-3 p-3 bg-card border border-border rounded-lg"
-                    >
-                      <CheckCircle className="size-4 text-emerald-500 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">{sub.userName}</div>
-                        <div className="text-xs text-muted-foreground">{sub.role.toUpperCase()}</div>
+                  {briefs.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <div className="h-14 w-14 rounded bg-muted flex items-center justify-center mb-4">
+                        <TrendingUp className="h-7 w-7 text-muted-foreground" />
                       </div>
+                      <p className="text-sm font-medium mb-1">No projects yet</p>
+                      <p className="text-xs text-muted-foreground max-w-xs">
+                        Create your first project to get started
+                      </p>
                     </div>
-                  ))}
-                  {submissions.filter(s => s.status === 'approved').length === 0 && (
-                    <div className="col-span-full p-6 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">
-                      No completed submissions yet
+                  ) : (
+                    <div className="divide-y">
+                      {briefs.slice(0, 5).map((brief) => (
+                        <div 
+                          key={brief.id} 
+                          className="flex items-center justify-between p-4 card-hover cursor-pointer"
+                          onClick={() => handleBriefSelect(brief)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`h-2 w-2 rounded-full ${
+                              brief.status === 'active' ? 'bg-foreground' : 
+                              brief.status === 'completed' ? 'bg-muted-foreground' : 'bg-muted'
+                            }`} />
+                            <div>
+                              <p className="text-sm font-medium">{brief.name}</p>
+                              <p className="text-xs text-muted-foreground">{brief.status}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setDeleteConfirm(brief.id); }}
+                            className="p-2 hover:bg-muted rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Trash2 className="size-4 text-muted-foreground" />
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -537,90 +511,118 @@ export default function App() {
             </div>
           )}
 
-          {/* PROJECTS/BRIEFS VIEW */}
+          {/* PROJECTS VIEW */}
           {currentView === 'briefs' && (
-            <div className="p-6 space-y-6 animate-fadeIn">
-              <div className="flex items-center justify-between mb-4">
-                <h1 className="text-2xl font-semibold">All Projects</h1>
+            <div className="space-y-6 px-4 pb-6 pt-14 animate-fadeIn">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold">All Projects</h2>
+                  <p className="text-sm text-muted-foreground mt-1">{briefs.length} projects total</p>
+                </div>
                 <Button onClick={() => setCurrentView('home')} variant="outline" size="sm">
-                  <Sparkles className="size-4 mr-2" /> New Project
+                  <Sparkles className="size-4 mr-2" /> New
                 </Button>
               </div>
-              <div className="grid gap-3">
-                {briefs.map(brief => (
-                  <div
-                    key={brief.id}
-                    className="group flex items-center gap-4 p-4 bg-card border border-border rounded-lg hover:border-primary/50 cursor-pointer transition-all"
-                    onClick={() => handleBriefSelect(brief)}
-                  >
-                    <div className={`size-3 rounded-full shrink-0 ${
-                      brief.status === 'active' ? 'bg-emerald-500' : 
-                      brief.status === 'completed' ? 'bg-blue-500' : 'bg-muted'
-                    }`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium">{brief.name}</div>
-                      <div className="text-sm text-muted-foreground">{brief.description || 'No description'}</div>
-                    </div>
-                    <span className={`text-xs px-2 py-1 rounded ${
-                      brief.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' :
-                      brief.status === 'completed' ? 'bg-blue-500/10 text-blue-400' : 'bg-muted text-muted-foreground'
-                    }`}>
-                      {brief.status}
-                    </span>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setDeleteConfirm(brief.id); }}
-                      className="opacity-0 group-hover:opacity-100 p-2 hover:bg-destructive/10 rounded transition-all"
+
+              <div className="relative">
+                <div aria-hidden className="absolute top-0 left-0 w-2.5 h-2.5 border-l-2 border-t-2 border-foreground/50" />
+                <div aria-hidden className="absolute top-0 right-0 w-2.5 h-2.5 border-r-2 border-t-2 border-foreground/50" />
+                <div aria-hidden className="absolute bottom-0 left-0 w-2.5 h-2.5 border-l-2 border-b-2 border-foreground/50" />
+                <div aria-hidden className="absolute bottom-0 right-0 w-2.5 h-2.5 border-r-2 border-b-2 border-foreground/50" />
+
+                <div className="border bg-background divide-y">
+                  {briefs.map(brief => (
+                    <div
+                      key={brief.id}
+                      className="flex items-center justify-between p-4 card-hover cursor-pointer"
+                      onClick={() => handleBriefSelect(brief)}
                     >
-                      <Trash2 className="size-4 text-muted-foreground hover:text-destructive" />
-                    </button>
-                  </div>
-                ))}
-                {briefs.length === 0 && (
-                  <div className="p-12 text-center border border-dashed border-border rounded-lg">
-                    <Sparkles className="size-8 mx-auto mb-3 text-muted-foreground" />
-                    <p className="text-muted-foreground mb-4">No projects yet</p>
-                    <Button onClick={() => setCurrentView('home')}>Create your first project</Button>
-                  </div>
-                )}
+                      <div className="flex items-center gap-3">
+                        <div className={`h-2 w-2 rounded-full ${
+                          brief.status === 'active' ? 'bg-foreground' : 
+                          brief.status === 'completed' ? 'bg-muted-foreground' : 'bg-muted'
+                        }`} />
+                        <div>
+                          <p className="text-sm font-medium">{brief.name}</p>
+                          <p className="text-xs text-muted-foreground">{brief.description || 'No description'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-muted-foreground uppercase">{brief.status}</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm(brief.id); }}
+                          className="p-2 hover:bg-destructive/10 rounded transition-colors"
+                        >
+                          <Trash2 className="size-4 text-muted-foreground hover:text-destructive" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {briefs.length === 0 && (
+                    <div className="p-12 text-center">
+                      <p className="text-muted-foreground text-sm">No projects yet</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
 
           {/* REVIEWS VIEW */}
           {currentView === 'reviews' && (
-            <div className="p-8 animate-fadeIn">
-              <div className="max-w-2xl mx-auto">
-                <h1 className="text-2xl font-semibold mb-6">Submissions</h1>
-                <div className="space-y-4">
+            <div className="space-y-6 px-4 pb-6 pt-14 animate-fadeIn">
+              <div>
+                <h2 className="text-xl font-semibold">Submissions</h2>
+                <p className="text-sm text-muted-foreground mt-1">Review team work</p>
+              </div>
+
+              <div className="relative max-w-2xl">
+                <div aria-hidden className="absolute top-0 left-0 w-2.5 h-2.5 border-l-2 border-t-2 border-foreground/50" />
+                <div aria-hidden className="absolute top-0 right-0 w-2.5 h-2.5 border-r-2 border-t-2 border-foreground/50" />
+                <div aria-hidden className="absolute bottom-0 left-0 w-2.5 h-2.5 border-l-2 border-b-2 border-foreground/50" />
+                <div aria-hidden className="absolute bottom-0 right-0 w-2.5 h-2.5 border-r-2 border-b-2 border-foreground/50" />
+
+                <div className="border bg-background divide-y">
                   {submissions.map(sub => (
-                    <div key={sub.id} className="p-6 bg-card border border-border rounded-lg">
+                    <div key={sub.id} className="p-6">
                       <div className="flex items-start justify-between mb-4">
                         <div>
                           <p className="font-medium">{sub.userName}</p>
-                          <p className="text-sm text-muted-foreground">{sub.role.toUpperCase()} • {sub.durationMinutes}m</p>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                            {sub.role} • {sub.durationMinutes}m
+                          </p>
                         </div>
-                        <span className={`px-3 py-1 rounded-full text-xs flex items-center gap-1 ${
-                          sub.status === 'approved' ? 'bg-emerald-500/10 text-emerald-400' :
-                          sub.status === 'rejected' ? 'bg-destructive/10 text-destructive' :
-                          'bg-yellow-500/10 text-yellow-400'
+                        <span className={`px-3 py-1 rounded text-xs uppercase tracking-wide ${
+                          sub.status === 'approved' ? 'bg-foreground text-background' :
+                          sub.status === 'rejected' ? 'bg-muted text-muted-foreground' :
+                          'bg-muted text-foreground'
                         }`}>
-                          {sub.status === 'pending' ? <Clock className="size-3" /> : <CheckCircle className="size-3" />}
                           {sub.status}
                         </span>
                       </div>
-                      <ul className="text-sm text-muted-foreground mb-4">
+                      <ul className="text-sm text-muted-foreground mb-4 space-y-1">
                         {sub.summaryLines.map((line, i) => <li key={i}>• {line}</li>)}
                       </ul>
                       {sub.status === 'pending' && currentRole === 'pm' && (
                         <div className="flex gap-2">
-                          <Button size="sm" onClick={() => handleReview(sub.id, 'approved')}>Approve</Button>
-                          <Button size="sm" variant="outline" onClick={() => handleReview(sub.id, 'rejected')}>Reject</Button>
+                          <button 
+                            onClick={() => handleReview(sub.id, 'approved')}
+                            className="btn-primary px-4 py-2 rounded text-sm"
+                          >
+                            Approve
+                          </button>
+                          <button 
+                            onClick={() => handleReview(sub.id, 'rejected')}
+                            className="btn-secondary px-4 py-2 rounded text-sm"
+                          >
+                            Reject
+                          </button>
                         </div>
                       )}
                     </div>
                   ))}
                   {submissions.length === 0 && (
-                    <div className="text-center py-12 text-muted-foreground">
+                    <div className="p-12 text-center text-muted-foreground text-sm">
                       No submissions yet
                     </div>
                   )}
@@ -630,24 +632,31 @@ export default function App() {
           )}
         </main>
 
-        {/* Delete Confirmation Modal */}
+        {/* Delete Modal */}
         {deleteConfirm && (
           <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-card border border-border rounded-lg p-6 max-w-sm w-full mx-4 animate-slideUp">
+            <div className="border bg-background p-6 max-w-sm w-full mx-4 animate-slideIn">
               <h3 className="font-semibold mb-2">Delete Project?</h3>
               <p className="text-sm text-muted-foreground mb-6">This action cannot be undone.</p>
               <div className="flex gap-2 justify-end">
-                <Button variant="ghost" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
-                <Button variant="destructive" onClick={() => handleDeleteBrief(deleteConfirm)}>
-                  <Trash2 className="size-4 mr-2" /> Delete
-                </Button>
+                <button 
+                  onClick={() => setDeleteConfirm(null)}
+                  className="btn-secondary px-4 py-2 rounded text-sm"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => handleDeleteBrief(deleteConfirm)}
+                  className="bg-destructive text-destructive-foreground px-4 py-2 rounded text-sm hover:opacity-90"
+                >
+                  Delete
+                </button>
               </div>
             </div>
           </div>
         )}
       </SidebarInset>
 
-      {/* AI Copilot - Floating Assistant */}
       <AICopilot userRole={currentRole} />
     </SidebarProvider>
   )

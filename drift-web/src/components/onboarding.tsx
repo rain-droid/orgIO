@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import { useUser, useOrganizationList, useAuth } from '@clerk/clerk-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { FileText, Users, Code, Palette, Briefcase, ArrowRight, Check, Loader2 } from 'lucide-react'
 import type { Role } from '@/types'
 import { api } from '@/lib/api'
@@ -32,7 +30,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     try {
       const org = await createOrganization({ name: orgName })
       await setActive?.({ organization: org.id })
-      // Wait a moment for Clerk to propagate the org change
       await new Promise(r => setTimeout(r, 1000))
       setStep('role')
     } catch (err) {
@@ -60,7 +57,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setLoading(true)
     setError(null)
     try {
-      // Force fresh token with org context (skipCache ensures we get updated org_id)
       let token: string | null = null
       for (let i = 0; i < 5; i++) {
         token = await getToken({ skipCache: true })
@@ -93,17 +89,17 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         <div className="flex items-center justify-center gap-2 mb-8">
           {['welcome', 'organization', 'role'].map((s, i) => (
             <div key={s} className="flex items-center">
-              <div className={`size-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+              <div className={`size-8 rounded flex items-center justify-center text-sm font-medium transition-colors ${
                 step === s 
-                  ? 'bg-primary text-primary-foreground' 
+                  ? 'bg-foreground text-background' 
                   : ['welcome', 'organization', 'role'].indexOf(step) > i
-                  ? 'bg-primary/20 text-primary'
+                  ? 'bg-foreground/20 text-foreground'
                   : 'bg-muted text-muted-foreground'
               }`}>
                 {['welcome', 'organization', 'role'].indexOf(step) > i ? <Check className="size-4" /> : i + 1}
               </div>
               {i < 2 && <div className={`w-12 h-0.5 mx-2 ${
-                ['welcome', 'organization', 'role'].indexOf(step) > i ? 'bg-emerald-500/50' : 'bg-muted'
+                ['welcome', 'organization', 'role'].indexOf(step) > i ? 'bg-foreground' : 'bg-muted'
               }`} />}
             </div>
           ))}
@@ -111,115 +107,134 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
         {/* Welcome Step */}
         {step === 'welcome' && (
-          <div className="text-center space-y-6 animate-in fade-in duration-300">
-            <div className="flex items-center justify-center gap-3">
-              <div className="bg-primary text-primary-foreground flex aspect-square size-16 items-center justify-center rounded-2xl">
+          <div className="text-center space-y-6 animate-fadeIn">
+            <div className="flex items-center justify-center">
+              <div className="bg-foreground text-background size-16 flex items-center justify-center rounded">
                 <FileText className="size-8" />
               </div>
             </div>
             <div>
-              <h1 className="text-3xl font-bold mb-2">Welcome to Drift</h1>
+              <h1 className="text-2xl font-semibold mb-2">Welcome to Drift</h1>
               <p className="text-muted-foreground">AI-powered sprint planning for modern teams</p>
             </div>
-            <div className="grid gap-3 text-left p-6 rounded-xl border bg-card">
-              <div className="flex items-start gap-3">
-                <div className="size-8 rounded-lg bg-pink-500/20 flex items-center justify-center shrink-0">
-                  <Briefcase className="size-4 text-pink-400" />
+
+            <div className="relative">
+              <div aria-hidden className="absolute top-0 left-0 w-2.5 h-2.5 border-l-2 border-t-2 border-foreground/50" />
+              <div aria-hidden className="absolute top-0 right-0 w-2.5 h-2.5 border-r-2 border-t-2 border-foreground/50" />
+              <div aria-hidden className="absolute bottom-0 left-0 w-2.5 h-2.5 border-l-2 border-b-2 border-foreground/50" />
+              <div aria-hidden className="absolute bottom-0 right-0 w-2.5 h-2.5 border-r-2 border-b-2 border-foreground/50" />
+
+              <div className="border bg-background p-6 space-y-4 text-left">
+                <div className="flex items-start gap-3">
+                  <div className="size-8 rounded bg-muted flex items-center justify-center shrink-0">
+                    <Briefcase className="size-4" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-sm">For Product Managers</div>
+                    <div className="text-xs text-muted-foreground">User stories, acceptance criteria, timeline</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="font-medium">For Product Managers</div>
-                  <div className="text-sm text-muted-foreground">User stories, acceptance criteria, timeline tracking</div>
+                <div className="flex items-start gap-3">
+                  <div className="size-8 rounded bg-muted flex items-center justify-center shrink-0">
+                    <Code className="size-4" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-sm">For Developers</div>
+                    <div className="text-xs text-muted-foreground">Architecture, API specs, code snippets</div>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="size-8 rounded-lg bg-cyan-500/20 flex items-center justify-center shrink-0">
-                  <Code className="size-4 text-cyan-400" />
-                </div>
-                <div>
-                  <div className="font-medium">For Developers</div>
-                  <div className="text-sm text-muted-foreground">Architecture diagrams, API specs, code snippets</div>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="size-8 rounded-lg bg-violet-500/20 flex items-center justify-center shrink-0">
-                  <Palette className="size-4 text-violet-400" />
-                </div>
-                <div>
-                  <div className="font-medium">For Designers</div>
-                  <div className="text-sm text-muted-foreground">User flows, component specs, design system</div>
+                <div className="flex items-start gap-3">
+                  <div className="size-8 rounded bg-muted flex items-center justify-center shrink-0">
+                    <Palette className="size-4" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-sm">For Designers</div>
+                    <div className="text-xs text-muted-foreground">User flows, components, design system</div>
+                  </div>
                 </div>
               </div>
             </div>
-            <Button 
-              size="lg" 
+
+            <button 
               onClick={() => setStep('organization')}
-              className="bg-primary hover:bg-primary/90 text-black w-full"
+              className="btn-primary w-full py-3 rounded text-sm font-medium inline-flex items-center justify-center gap-2"
             >
-              Get Started
-              <ArrowRight className="size-4 ml-2" />
-            </Button>
+              Get Started <ArrowRight className="size-4" />
+            </button>
           </div>
         )}
 
         {/* Organization Step */}
         {step === 'organization' && (
-          <div className="space-y-6 animate-in fade-in duration-300">
+          <div className="space-y-6 animate-fadeIn">
             <div className="text-center">
-              <div className="size-12 rounded-xl bg-primary/20 flex items-center justify-center mx-auto mb-4">
-                <Users className="size-6 text-primary" />
+              <div className="size-12 rounded bg-muted flex items-center justify-center mx-auto mb-4">
+                <Users className="size-6" />
               </div>
-              <h1 className="text-2xl font-bold mb-2">Set up your workspace</h1>
-              <p className="text-muted-foreground">Create a new organization or join an existing one</p>
+              <h1 className="text-xl font-semibold mb-2">Set up your workspace</h1>
+              <p className="text-muted-foreground text-sm">Create or join an organization</p>
             </div>
 
-            {/* Create New */}
-            <div className="p-6 rounded-xl border bg-card space-y-4">
-              <h3 className="font-semibold">Create new organization</h3>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Organization name..."
-                  value={orgName}
-                  onChange={(e) => setOrgName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleCreateOrg()}
-                  className="flex-1"
-                />
-                <Button 
-                  onClick={handleCreateOrg}
-                  disabled={!orgName.trim() || loading}
-                  className="bg-primary hover:bg-primary/90 text-black"
-                >
-                  {loading ? <Loader2 className="size-4 animate-spin" /> : 'Create'}
-                </Button>
+            <div className="relative">
+              <div aria-hidden className="absolute top-0 left-0 w-2.5 h-2.5 border-l-2 border-t-2 border-foreground/50" />
+              <div aria-hidden className="absolute top-0 right-0 w-2.5 h-2.5 border-r-2 border-t-2 border-foreground/50" />
+              <div aria-hidden className="absolute bottom-0 left-0 w-2.5 h-2.5 border-l-2 border-b-2 border-foreground/50" />
+              <div aria-hidden className="absolute bottom-0 right-0 w-2.5 h-2.5 border-r-2 border-b-2 border-foreground/50" />
+
+              <div className="border bg-background p-6 space-y-4">
+                <h3 className="font-medium text-sm">Create new organization</h3>
+                <div className="flex gap-2">
+                  <input
+                    placeholder="Organization name..."
+                    value={orgName}
+                    onChange={(e) => setOrgName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateOrg()}
+                    className="flex-1 bg-transparent border rounded px-3 py-2 text-sm placeholder:text-muted-foreground/50 input-focus"
+                  />
+                  <button 
+                    onClick={handleCreateOrg}
+                    disabled={!orgName.trim() || loading}
+                    className="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-50"
+                  >
+                    {loading ? <Loader2 className="size-4 animate-spin" /> : 'Create'}
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Existing Orgs */}
             {existingOrgs.length > 0 && (
-              <div className="p-6 rounded-xl border bg-card space-y-4">
-                <h3 className="font-semibold">Or select existing</h3>
-                <div className="space-y-2">
-                  {existingOrgs.map((membership) => (
-                    <button
-                      key={membership.organization.id}
-                      onClick={() => handleSelectExistingOrg(membership.organization.id)}
-                      disabled={loading}
-                      className="w-full p-3 rounded-lg border bg-background hover:bg-accent/50 transition-colors flex items-center gap-3 text-left"
-                    >
-                      <div className="size-10 rounded-lg bg-muted flex items-center justify-center font-semibold">
-                        {membership.organization.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="font-medium">{membership.organization.name}</div>
-                        <div className="text-xs text-muted-foreground">{membership.role}</div>
-                      </div>
-                    </button>
-                  ))}
+              <div className="relative">
+                <div aria-hidden className="absolute top-0 left-0 w-2.5 h-2.5 border-l-2 border-t-2 border-foreground/50" />
+                <div aria-hidden className="absolute top-0 right-0 w-2.5 h-2.5 border-r-2 border-t-2 border-foreground/50" />
+                <div aria-hidden className="absolute bottom-0 left-0 w-2.5 h-2.5 border-l-2 border-b-2 border-foreground/50" />
+                <div aria-hidden className="absolute bottom-0 right-0 w-2.5 h-2.5 border-r-2 border-b-2 border-foreground/50" />
+
+                <div className="border bg-background p-6 space-y-4">
+                  <h3 className="font-medium text-sm">Or select existing</h3>
+                  <div className="space-y-2">
+                    {existingOrgs.map((membership) => (
+                      <button
+                        key={membership.organization.id}
+                        onClick={() => handleSelectExistingOrg(membership.organization.id)}
+                        disabled={loading}
+                        className="w-full p-3 rounded border bg-background hover:bg-muted/50 transition-colors flex items-center gap-3 text-left"
+                      >
+                        <div className="size-10 rounded bg-muted flex items-center justify-center font-semibold">
+                          {membership.organization.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="font-medium text-sm">{membership.organization.name}</div>
+                          <div className="text-xs text-muted-foreground">{membership.role}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
 
             {error && (
-              <div className="p-3 rounded-lg bg-destructive/15 border border-destructive/30 text-destructive text-sm">
+              <div className="p-3 rounded border border-destructive/30 bg-destructive/10 text-destructive text-sm">
                 {error}
               </div>
             )}
@@ -228,48 +243,48 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
         {/* Role Step */}
         {step === 'role' && (
-          <div className="space-y-6 animate-in fade-in duration-300">
+          <div className="space-y-6 animate-fadeIn">
             <div className="text-center">
-              <h1 className="text-2xl font-bold mb-2">What's your role?</h1>
-              <p className="text-muted-foreground">This helps us personalize your experience</p>
+              <h1 className="text-xl font-semibold mb-2">What's your role?</h1>
+              <p className="text-muted-foreground text-sm">This helps us personalize your experience</p>
             </div>
 
             <div className="space-y-3">
               {[
-                { role: 'pm' as Role, icon: Briefcase, color: 'pink', title: 'Product Manager', desc: 'I define features and manage sprints' },
-                { role: 'dev' as Role, icon: Code, color: 'cyan', title: 'Developer', desc: 'I build and implement features' },
-                { role: 'designer' as Role, icon: Palette, color: 'violet', title: 'Designer', desc: 'I design interfaces and experiences' },
-              ].map(({ role, icon: Icon, color, title, desc }) => (
-                <button
-                  key={role}
-                  onClick={() => handleSelectRole(role)}
-                  disabled={loading}
-                  className={`w-full p-4 rounded-xl border transition-all flex items-center gap-4 text-left ${
-                    selectedRole === role 
-                      ? `bg-${color}-500/20 border-${color}-500/50` 
-                      : 'bg-card hover:bg-accent/50 border-border'
-                  }`}
-                >
-                  <div className={`size-12 rounded-xl flex items-center justify-center ${
-                    color === 'pink' ? 'bg-pink-500/20' : color === 'cyan' ? 'bg-cyan-500/20' : 'bg-violet-500/20'
-                  }`}>
-                    <Icon className={`size-6 ${
-                      color === 'pink' ? 'text-pink-400' : color === 'cyan' ? 'text-cyan-400' : 'text-violet-400'
-                    }`} />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-semibold">{title}</div>
-                    <div className="text-sm text-muted-foreground">{desc}</div>
-                  </div>
-                  {selectedRole === role && loading && (
-                    <Loader2 className="size-5 animate-spin text-muted-foreground" />
-                  )}
-                </button>
+                { role: 'pm' as Role, icon: Briefcase, title: 'Product Manager', desc: 'I define features and manage sprints' },
+                { role: 'dev' as Role, icon: Code, title: 'Developer', desc: 'I build and implement features' },
+                { role: 'designer' as Role, icon: Palette, title: 'Designer', desc: 'I design interfaces and experiences' },
+              ].map(({ role, icon: Icon, title, desc }) => (
+                <div key={role} className="relative">
+                  <div aria-hidden className="absolute top-0 left-0 w-2.5 h-2.5 border-l-2 border-t-2 border-foreground/50" />
+                  <div aria-hidden className="absolute top-0 right-0 w-2.5 h-2.5 border-r-2 border-t-2 border-foreground/50" />
+                  <div aria-hidden className="absolute bottom-0 left-0 w-2.5 h-2.5 border-l-2 border-b-2 border-foreground/50" />
+                  <div aria-hidden className="absolute bottom-0 right-0 w-2.5 h-2.5 border-r-2 border-b-2 border-foreground/50" />
+
+                  <button
+                    onClick={() => handleSelectRole(role)}
+                    disabled={loading}
+                    className={`w-full p-4 border bg-background transition-all flex items-center gap-4 text-left card-hover ${
+                      selectedRole === role ? 'border-foreground' : ''
+                    }`}
+                  >
+                    <div className="size-12 rounded bg-muted flex items-center justify-center">
+                      <Icon className="size-6" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium">{title}</div>
+                      <div className="text-sm text-muted-foreground">{desc}</div>
+                    </div>
+                    {selectedRole === role && loading && (
+                      <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                    )}
+                  </button>
+                </div>
               ))}
             </div>
 
             {error && (
-              <div className="p-3 rounded-lg bg-destructive/15 border border-destructive/30 text-destructive text-sm">
+              <div className="p-3 rounded border border-destructive/30 bg-destructive/10 text-destructive text-sm">
                 {error}
               </div>
             )}

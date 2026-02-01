@@ -15,7 +15,6 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 type Role = 'pm' | 'dev' | 'designer'
 
@@ -41,27 +40,9 @@ interface PlanningViewProps {
 }
 
 const roleConfig = {
-  pm: { 
-    icon: LayoutGrid, 
-    label: 'Product Manager', 
-    color: 'text-blue-400', 
-    bg: 'bg-blue-500/10',
-    border: 'border-blue-500/30',
-  },
-  dev: { 
-    icon: Code, 
-    label: 'Developer', 
-    color: 'text-emerald-400', 
-    bg: 'bg-emerald-500/10',
-    border: 'border-emerald-500/30',
-  },
-  designer: { 
-    icon: Palette, 
-    label: 'Designer', 
-    color: 'text-violet-400', 
-    bg: 'bg-violet-500/10',
-    border: 'border-violet-500/30',
-  },
+  pm: { icon: LayoutGrid, label: 'Product Manager' },
+  dev: { icon: Code, label: 'Developer' },
+  designer: { icon: Palette, label: 'Designer' },
 }
 
 export function PlanningView({ projectName, onComplete, onCancel }: PlanningViewProps) {
@@ -81,136 +62,114 @@ export function PlanningView({ projectName, onComplete, onCancel }: PlanningView
   useEffect(() => {
     startPlanning()
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close()
-      }
+      if (wsRef.current) wsRef.current.close()
     }
   }, [])
 
   const startPlanning = async () => {
     setPhase('thinking')
-    
-    // Simulate thinking phase
     await new Promise(r => setTimeout(r, 1500))
     setPhase('planning')
 
-    // Get token for WebSocket auth
     const token = api.getStoredToken()
-    
-    // Try WebSocket first, with timeout fallback
-    const wsUrl = `${import.meta.env.VITE_API_URL?.replace('https://', 'wss://').replace('http://', 'ws://')}/api/planning/stream`
+    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/planning/stream`
     
     let wsConnected = false
-    let wsTimedOut = false
-    
-    // Timeout: If no response in 5 seconds, use REST fallback
-    const timeoutId = setTimeout(() => {
-      if (!wsConnected) {
-        console.log('WebSocket timeout, using REST fallback')
-        wsTimedOut = true
-        if (wsRef.current) {
-          wsRef.current.close()
-        }
-        generatePlanFallback()
+    const wsTimeout = setTimeout(() => {
+      if (!wsConnected && wsRef.current) {
+        console.log('WebSocket timeout, falling back to REST')
+        wsRef.current.close()
+        fallbackToRest()
       }
-    }, 5000)
-    
+    }, 10000)
+
     try {
-      console.log('Connecting to WebSocket:', wsUrl)
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
       ws.onopen = () => {
-        console.log('WebSocket connected, sending plan request')
         wsConnected = true
-        ws.send(JSON.stringify({
-          type: 'plan',
-          projectName,
-          token: `Bearer ${token}`,
-        }))
+        clearTimeout(wsTimeout)
+        ws.send(JSON.stringify({ type: 'plan', projectName, token }))
       }
 
       ws.onmessage = (event) => {
-        clearTimeout(timeoutId)
-        const data = JSON.parse(event.data)
-        console.log('WebSocket message:', data.type)
-        
-        if (data.type === 'overview') {
-          setOverview(data.content)
-        } else if (data.type === 'role_start') {
-          setCurrentStreamRole(data.role)
-          setStreamingContent('')
-        } else if (data.type === 'chunk') {
-          setStreamingContent(prev => prev + data.content)
-        } else if (data.type === 'role_tasks') {
-          // Parse and add tasks for this role
-          const tasks: Task[] = (data.tasks || []).map((t: any, i: number) => ({
-            id: `${data.role}-${i}-${Date.now()}`,
-            title: t.title,
-            description: t.description || '',
-            priority: t.priority || 'medium',
-            estimatedHours: t.estimated_hours || t.estimatedHours,
-            checked: true,
-          }))
+        try {
+          const data = JSON.parse(event.data)
           
-          setPlans(prev => prev.map(p => 
-            p.role === data.role ? { ...p, tasks } : p
-          ))
-          setCurrentStreamRole(null)
-          setStreamingContent('')
-        } else if (data.type === 'complete') {
-          setPhase('ready')
-        } else if (data.type === 'error') {
-          console.error('Planning error:', data.message)
-          if (!wsTimedOut) {
-            generatePlanFallback()
+          if (data.type === 'overview') {
+            setOverview(data.content)
+          } else if (data.type === 'role_start') {
+            setCurrentStreamRole(data.role)
+            setStreamingContent('')
+          } else if (data.type === 'chunk') {
+            setStreamingContent(prev => prev + data.content)
+          } else if (data.type === 'role_tasks') {
+            const tasks: Task[] = data.tasks.map((t: any, i: number) => ({
+              id: `${data.role}-${i}`,
+              title: t.title,
+              description: t.description || '',
+              priority: t.priority || 'medium',
+              estimatedHours: t.estimatedHours,
+              checked: true,
+            }))
+            
+            setPlans(prev => prev.map(p => 
+              p.role === data.role ? { ...p, tasks } : p
+            ))
+            setStreamingContent('')
+          } else if (data.type === 'complete') {
+            setCurrentStreamRole(null)
+            setPhase('ready')
+          } else if (data.type === 'error') {
+            console.error('Planning error:', data.message)
+            fallbackToRest()
           }
+        } catch (err) {
+          console.error('Failed to parse WebSocket message:', err)
         }
       }
 
-      ws.onerror = (err) => {
-        console.error('WebSocket error:', err)
-        clearTimeout(timeoutId)
-        if (!wsTimedOut) {
-          generatePlanFallback()
-        }
+      ws.onerror = () => {
+        clearTimeout(wsTimeout)
+        if (!wsConnected) fallbackToRest()
       }
-      
+
       ws.onclose = () => {
-        console.log('WebSocket closed')
+        clearTimeout(wsTimeout)
+        if (!wsConnected) fallbackToRest()
       }
     } catch (err) {
-      console.error('WebSocket setup error:', err)
-      clearTimeout(timeoutId)
-      if (!wsTimedOut) {
-        generatePlanFallback()
-      }
+      clearTimeout(wsTimeout)
+      fallbackToRest()
     }
   }
 
-  const generatePlanFallback = async () => {
+  const fallbackToRest = async () => {
     console.log('Using REST API fallback for planning')
-    // Fallback: Use REST API to generate plan
-    setOverview(`Planning "${projectName}" - generating tasks for all roles...`)
+    setPhase('planning')
+    setOverview(`Planning: ${projectName}`)
     
-    for (const role of ['pm', 'dev', 'designer'] as Role[]) {
-      console.log(`Generating tasks for ${role}...`)
+    const roles: Role[] = ['pm', 'dev', 'designer']
+    for (const role of roles) {
       setCurrentStreamRole(role)
+      setStreamingContent('Generating tasks...')
+      
       try {
         const response = await api.generateTasks(projectName, role)
-        console.log(`Got ${role} tasks:`, response)
-        const tasks: Task[] = (response.tasks || []).map((t: any, i: number) => ({
-          id: `${role}-${i}-${Date.now()}`,
+        const tasks: Task[] = response.tasks.map((t, i) => ({
+          id: `${role}-${i}`,
           title: t.title,
           description: t.description || '',
           priority: t.priority || 'medium',
-          estimatedHours: t.estimated_hours || t.estimatedHours,
+          estimatedHours: t.estimatedHours,
           checked: true,
         }))
         
         setPlans(prev => prev.map(p => 
           p.role === role ? { ...p, tasks } : p
         ))
+        setStreamingContent('')
       } catch (err) {
         console.error(`Failed to generate ${role} tasks:`, err)
       }
@@ -270,12 +229,10 @@ export function PlanningView({ projectName, onComplete, onCancel }: PlanningView
   const handleCreateProject = async () => {
     setCreating(true)
     try {
-      // Create the project - tasks will be generated by backend
       const newBrief = await api.createBrief({
         name: projectName,
         description: overview,
       })
-      
       onComplete(newBrief.id)
     } catch (err) {
       console.error('Failed to create project:', err)
@@ -290,7 +247,7 @@ export function PlanningView({ projectName, onComplete, onCancel }: PlanningView
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+      <header className="border-b sticky top-0 bg-background z-10">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <button
             onClick={onCancel}
@@ -300,75 +257,76 @@ export function PlanningView({ projectName, onComplete, onCancel }: PlanningView
             <span className="text-sm">Cancel</span>
           </button>
           
-          <div className="flex items-center gap-2">
-            <Brain className={`size-5 ${phase === 'thinking' ? 'text-primary animate-pulse' : 'text-muted-foreground'}`} />
-            <span className="text-sm font-medium">
-              {phase === 'thinking' && 'Analyzing project...'}
-              {phase === 'planning' && 'Generating plan...'}
-              {phase === 'ready' && 'Plan ready'}
+          <div className="flex items-center gap-2 px-3 py-1.5 border rounded">
+            <Brain className={`size-4 ${phase === 'thinking' ? 'animate-pulse' : ''}`} />
+            <span className="text-xs font-medium uppercase tracking-wide">
+              {phase === 'thinking' && 'Analyzing...'}
+              {phase === 'planning' && 'Generating...'}
+              {phase === 'ready' && 'Ready'}
             </span>
           </div>
 
-          <Button
+          <button
             onClick={handleCreateProject}
             disabled={phase !== 'ready' || creating || selectedTasks === 0}
-            className="gap-2"
+            className="btn-primary px-4 py-2 rounded text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {creating ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Rocket className="size-4" />
-            )}
-            Create Project
-          </Button>
+            {creating ? <Loader2 className="size-4 animate-spin" /> : <Rocket className="size-4" />}
+            Create
+          </button>
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-4xl mx-auto px-6 py-8">
         {/* Project Title */}
         <div className="mb-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-full text-xs text-primary font-medium mb-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1 border rounded text-xs font-medium uppercase tracking-wide text-muted-foreground mb-3">
             <Sparkles className="size-3" />
             AI-Generated Plan
           </div>
-          <h1 className="text-3xl font-bold mb-2">{projectName}</h1>
+          <h1 className="text-2xl font-semibold mb-2">{projectName}</h1>
           
-          {/* Overview */}
           {overview && (
-            <p className="text-muted-foreground leading-relaxed">{overview}</p>
+            <p className="text-muted-foreground">{overview}</p>
           )}
           
           {phase === 'thinking' && (
             <div className="flex items-center gap-3 mt-4">
               <div className="flex gap-1">
-                <div className="size-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="size-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="size-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }} />
+                <div className="typing-dot" />
+                <div className="typing-dot" />
+                <div className="typing-dot" />
               </div>
-              <span className="text-sm text-muted-foreground">Understanding your project requirements...</span>
+              <span className="text-sm text-muted-foreground">Understanding requirements...</span>
             </div>
           )}
         </div>
 
         {/* Task Summary */}
         {phase !== 'thinking' && (
-          <div className="flex items-center gap-4 mb-6 p-4 bg-card border border-border rounded-lg">
-            <div className="flex-1">
-              <span className="text-2xl font-bold">{selectedTasks}</span>
-              <span className="text-muted-foreground ml-1">/ {totalTasks} tasks selected</span>
-            </div>
-            <div className="flex gap-2">
-              {plans.map(p => {
-                const config = roleConfig[p.role]
-                const count = p.tasks.filter(t => t.checked).length
-                return (
-                  <div key={p.role} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${config.bg}`}>
-                    <config.icon className={`size-3.5 ${config.color}`} />
-                    <span className={`text-sm font-medium ${config.color}`}>{count}</span>
-                  </div>
-                )
-              })}
+          <div className="relative mb-6">
+            <div aria-hidden className="absolute top-0 left-0 w-2.5 h-2.5 border-l-2 border-t-2 border-foreground/50" />
+            <div aria-hidden className="absolute top-0 right-0 w-2.5 h-2.5 border-r-2 border-t-2 border-foreground/50" />
+            <div aria-hidden className="absolute bottom-0 left-0 w-2.5 h-2.5 border-l-2 border-b-2 border-foreground/50" />
+            <div aria-hidden className="absolute bottom-0 right-0 w-2.5 h-2.5 border-r-2 border-b-2 border-foreground/50" />
+
+            <div className="border bg-background p-6 flex items-center justify-between">
+              <div>
+                <span className="text-3xl font-medium">{selectedTasks}</span>
+                <span className="text-muted-foreground ml-2">/ {totalTasks} tasks selected</span>
+              </div>
+              <div className="flex gap-4">
+                {plans.map(p => {
+                  const config = roleConfig[p.role]
+                  const count = p.tasks.filter(t => t.checked).length
+                  return (
+                    <div key={p.role} className="flex items-center gap-2 text-sm">
+                      <config.icon className="size-4 text-muted-foreground" />
+                      <span className="font-medium">{count}</span>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -380,138 +338,132 @@ export function PlanningView({ projectName, onComplete, onCancel }: PlanningView
             const isStreaming = currentStreamRole === plan.role
             
             return (
-              <div 
-                key={plan.role} 
-                className={`border rounded-lg overflow-hidden transition-all ${
-                  isStreaming ? `${config.border} border-2` : 'border-border'
-                }`}
-              >
-                {/* Role Header */}
-                <button
-                  onClick={() => toggleRoleExpanded(roleIdx)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 ${config.bg} hover:opacity-90 transition-opacity`}
-                >
-                  {plan.expanded ? (
-                    <ChevronDown className={`size-4 ${config.color}`} />
-                  ) : (
-                    <ChevronRight className={`size-4 ${config.color}`} />
-                  )}
-                  <config.icon className={`size-5 ${config.color}`} />
-                  <span className={`font-semibold ${config.color}`}>{config.label}</span>
-                  <span className="text-sm text-muted-foreground ml-auto">
-                    {plan.tasks.filter(t => t.checked).length} / {plan.tasks.length} tasks
-                  </span>
-                  {isStreaming && (
-                    <Loader2 className={`size-4 animate-spin ${config.color}`} />
-                  )}
-                </button>
+              <div key={plan.role} className="relative">
+                <div aria-hidden className="absolute top-0 left-0 w-2.5 h-2.5 border-l-2 border-t-2 border-foreground/50" />
+                <div aria-hidden className="absolute top-0 right-0 w-2.5 h-2.5 border-r-2 border-t-2 border-foreground/50" />
+                <div aria-hidden className="absolute bottom-0 left-0 w-2.5 h-2.5 border-l-2 border-b-2 border-foreground/50" />
+                <div aria-hidden className="absolute bottom-0 right-0 w-2.5 h-2.5 border-r-2 border-b-2 border-foreground/50" />
 
-                {/* Tasks */}
-                {plan.expanded && (
-                  <div className="p-4 space-y-2 bg-card">
-                    {/* Streaming indicator */}
-                    {isStreaming && streamingContent && (
-                      <div className="p-3 bg-muted/50 rounded-lg text-sm text-muted-foreground italic">
-                        {streamingContent}
-                        <span className="inline-block w-1.5 h-4 bg-primary/50 animate-pulse ml-1" />
-                      </div>
+                <div className={`border bg-background ${isStreaming ? 'border-foreground' : ''}`}>
+                  {/* Role Header */}
+                  <button
+                    onClick={() => toggleRoleExpanded(roleIdx)}
+                    className="w-full flex items-center gap-3 px-6 py-4 border-b card-hover"
+                  >
+                    {plan.expanded ? (
+                      <ChevronDown className="size-4 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="size-4 text-muted-foreground" />
                     )}
+                    <config.icon className="size-5" />
+                    <span className="font-medium">{config.label}</span>
+                    <span className="text-sm text-muted-foreground ml-auto">
+                      {plan.tasks.filter(t => t.checked).length} / {plan.tasks.length} tasks
+                    </span>
+                    {isStreaming && (
+                      <Loader2 className="size-4 animate-spin" />
+                    )}
+                  </button>
 
-                    {/* Task list */}
-                    {plan.tasks.map((task) => (
-                      <div
-                        key={task.id}
-                        className={`group flex items-start gap-3 p-3 rounded-lg border transition-all ${
-                          task.checked 
-                            ? 'bg-card border-border hover:border-primary/30' 
-                            : 'bg-muted/30 border-transparent opacity-60'
-                        }`}
-                      >
-                        <button
-                          onClick={() => toggleTask(roleIdx, task.id)}
-                          className={`mt-0.5 size-5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
-                            task.checked 
-                              ? `${config.border} ${config.bg}` 
-                              : 'border-muted-foreground/30'
+                  {/* Tasks */}
+                  {plan.expanded && (
+                    <div className="p-4 space-y-2">
+                      {isStreaming && streamingContent && (
+                        <div className="p-3 bg-muted/50 rounded text-sm text-muted-foreground italic">
+                          {streamingContent}
+                          <span className="inline-block w-1.5 h-4 bg-foreground/50 animate-pulse ml-1" />
+                        </div>
+                      )}
+
+                      {plan.tasks.map((task) => (
+                        <div
+                          key={task.id}
+                          className={`group flex items-start gap-3 p-3 border rounded transition-all ${
+                            task.checked ? 'bg-background' : 'bg-muted/30 opacity-60'
                           }`}
                         >
-                          {task.checked && <Check className={`size-3 ${config.color}`} />}
-                        </button>
+                          <button
+                            onClick={() => toggleTask(roleIdx, task.id)}
+                            className={`mt-0.5 size-5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
+                              task.checked ? 'border-foreground bg-foreground' : 'border-muted-foreground/30'
+                            }`}
+                          >
+                            {task.checked && <Check className="size-3 text-background" />}
+                          </button>
 
-                        <div className="flex-1 min-w-0">
-                          {editingTask === task.id ? (
-                            <input
-                              type="text"
-                              value={task.title}
-                              onChange={(e) => updateTaskTitle(roleIdx, task.id, e.target.value)}
-                              onBlur={() => setEditingTask(null)}
-                              onKeyDown={(e) => e.key === 'Enter' && setEditingTask(null)}
-                              autoFocus
-                              className="w-full bg-transparent border-b border-primary focus:outline-none font-medium"
-                            />
-                          ) : (
-                            <div 
-                              className={`font-medium ${!task.checked && 'line-through'}`}
-                              onDoubleClick={() => setEditingTask(task.id)}
-                            >
-                              {task.title}
-                            </div>
-                          )}
-                          {task.description && (
-                            <div className="text-sm text-muted-foreground mt-0.5">{task.description}</div>
-                          )}
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className={`text-xs px-2 py-0.5 rounded ${
-                              task.priority === 'high' ? 'bg-red-500/10 text-red-400' :
-                              task.priority === 'medium' ? 'bg-yellow-500/10 text-yellow-400' :
-                              'bg-muted text-muted-foreground'
-                            }`}>
-                              {task.priority}
-                            </span>
-                            {task.estimatedHours && (
-                              <span className="text-xs text-muted-foreground">
-                                ~{task.estimatedHours}h
-                              </span>
+                          <div className="flex-1 min-w-0">
+                            {editingTask === task.id ? (
+                              <input
+                                type="text"
+                                value={task.title}
+                                onChange={(e) => updateTaskTitle(roleIdx, task.id, e.target.value)}
+                                onBlur={() => setEditingTask(null)}
+                                onKeyDown={(e) => e.key === 'Enter' && setEditingTask(null)}
+                                autoFocus
+                                className="w-full bg-transparent border-b border-foreground focus:outline-none font-medium"
+                              />
+                            ) : (
+                              <div 
+                                className={`font-medium ${!task.checked && 'line-through'}`}
+                                onDoubleClick={() => setEditingTask(task.id)}
+                              >
+                                {task.title}
+                              </div>
                             )}
+                            {task.description && (
+                              <div className="text-sm text-muted-foreground mt-0.5">{task.description}</div>
+                            )}
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className={`text-xs px-2 py-0.5 rounded uppercase tracking-wide ${
+                                task.priority === 'high' ? 'bg-foreground text-background' :
+                                task.priority === 'medium' ? 'bg-muted text-foreground' :
+                                'bg-muted text-muted-foreground'
+                              }`}>
+                                {task.priority}
+                              </span>
+                              {task.estimatedHours && (
+                                <span className="text-xs text-muted-foreground">
+                                  ~{task.estimatedHours}h
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => setEditingTask(task.id)}
+                              className="p-1.5 hover:bg-muted rounded transition-colors"
+                            >
+                              <Edit3 className="size-3.5 text-muted-foreground" />
+                            </button>
+                            <button
+                              onClick={() => deleteTask(roleIdx, task.id)}
+                              className="p-1.5 hover:bg-destructive/10 rounded transition-colors"
+                            >
+                              <Trash2 className="size-3.5 text-muted-foreground hover:text-destructive" />
+                            </button>
                           </div>
                         </div>
+                      ))}
 
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => setEditingTask(task.id)}
-                            className="p-1.5 hover:bg-muted rounded transition-colors"
-                          >
-                            <Edit3 className="size-3.5 text-muted-foreground" />
-                          </button>
-                          <button
-                            onClick={() => deleteTask(roleIdx, task.id)}
-                            className="p-1.5 hover:bg-destructive/10 rounded transition-colors"
-                          >
-                            <Trash2 className="size-3.5 text-muted-foreground hover:text-destructive" />
-                          </button>
+                      {phase === 'ready' && (
+                        <button
+                          onClick={() => addTask(roleIdx)}
+                          className="w-full flex items-center justify-center gap-2 p-3 border border-dashed rounded text-muted-foreground hover:text-foreground hover:border-foreground transition-all"
+                        >
+                          <Plus className="size-4" />
+                          <span className="text-sm">Add Task</span>
+                        </button>
+                      )}
+
+                      {plan.tasks.length === 0 && !isStreaming && (
+                        <div className="text-center py-6 text-muted-foreground text-sm">
+                          {phase === 'planning' ? 'Generating tasks...' : 'No tasks yet'}
                         </div>
-                      </div>
-                    ))}
-
-                    {/* Add task button */}
-                    {phase === 'ready' && (
-                      <button
-                        onClick={() => addTask(roleIdx)}
-                        className="w-full flex items-center justify-center gap-2 p-3 border border-dashed border-border rounded-lg text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all"
-                      >
-                        <Plus className="size-4" />
-                        <span className="text-sm">Add Task</span>
-                      </button>
-                    )}
-
-                    {/* Empty state */}
-                    {plan.tasks.length === 0 && !isStreaming && (
-                      <div className="text-center py-6 text-muted-foreground text-sm">
-                        {phase === 'planning' ? 'Generating tasks...' : 'No tasks yet'}
-                      </div>
-                    )}
-                  </div>
-                )}
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )
           })}
@@ -519,25 +471,32 @@ export function PlanningView({ projectName, onComplete, onCancel }: PlanningView
 
         {/* Bottom Actions */}
         {phase === 'ready' && (
-          <div className="mt-8 flex items-center justify-between p-6 bg-card border border-border rounded-lg">
-            <div>
-              <h3 className="font-semibold">Ready to create?</h3>
-              <p className="text-sm text-muted-foreground">
-                {selectedTasks} tasks will be created across {plans.filter(p => p.tasks.some(t => t.checked)).length} roles
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={onCancel}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreateProject} disabled={creating || selectedTasks === 0} className="gap-2">
-                {creating ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Rocket className="size-4" />
-                )}
-                Create Project
-              </Button>
+          <div className="mt-8 relative">
+            <div aria-hidden className="absolute top-0 left-0 w-2.5 h-2.5 border-l-2 border-t-2 border-foreground/50" />
+            <div aria-hidden className="absolute top-0 right-0 w-2.5 h-2.5 border-r-2 border-t-2 border-foreground/50" />
+            <div aria-hidden className="absolute bottom-0 left-0 w-2.5 h-2.5 border-l-2 border-b-2 border-foreground/50" />
+            <div aria-hidden className="absolute bottom-0 right-0 w-2.5 h-2.5 border-r-2 border-b-2 border-foreground/50" />
+
+            <div className="border bg-background p-6 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold">Ready to create?</h3>
+                <p className="text-sm text-muted-foreground">
+                  {selectedTasks} tasks across {plans.filter(p => p.tasks.some(t => t.checked)).length} roles
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={onCancel} className="btn-secondary px-4 py-2 rounded text-sm">
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleCreateProject} 
+                  disabled={creating || selectedTasks === 0} 
+                  className="btn-primary px-4 py-2 rounded text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {creating ? <Loader2 className="size-4 animate-spin" /> : <Rocket className="size-4" />}
+                  Create Project
+                </button>
+              </div>
             </div>
           </div>
         )}
