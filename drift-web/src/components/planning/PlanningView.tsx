@@ -97,14 +97,32 @@ export function PlanningView({ projectName, onComplete, onCancel }: PlanningView
     // Get token for WebSocket auth
     const token = api.getStoredToken()
     
-    // Connect to WebSocket for streaming
+    // Try WebSocket first, with timeout fallback
     const wsUrl = `${import.meta.env.VITE_API_URL?.replace('https://', 'wss://').replace('http://', 'ws://')}/api/planning/stream`
     
+    let wsConnected = false
+    let wsTimedOut = false
+    
+    // Timeout: If no response in 5 seconds, use REST fallback
+    const timeoutId = setTimeout(() => {
+      if (!wsConnected) {
+        console.log('WebSocket timeout, using REST fallback')
+        wsTimedOut = true
+        if (wsRef.current) {
+          wsRef.current.close()
+        }
+        generatePlanFallback()
+      }
+    }, 5000)
+    
     try {
+      console.log('Connecting to WebSocket:', wsUrl)
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
       ws.onopen = () => {
+        console.log('WebSocket connected, sending plan request')
+        wsConnected = true
         ws.send(JSON.stringify({
           type: 'plan',
           projectName,
@@ -113,7 +131,9 @@ export function PlanningView({ projectName, onComplete, onCancel }: PlanningView
       }
 
       ws.onmessage = (event) => {
+        clearTimeout(timeoutId)
         const data = JSON.parse(event.data)
+        console.log('WebSocket message:', data.type)
         
         if (data.type === 'overview') {
           setOverview(data.content)
@@ -142,28 +162,43 @@ export function PlanningView({ projectName, onComplete, onCancel }: PlanningView
           setPhase('ready')
         } else if (data.type === 'error') {
           console.error('Planning error:', data.message)
-          // Fallback to REST API
-          generatePlanFallback()
+          if (!wsTimedOut) {
+            generatePlanFallback()
+          }
         }
       }
 
-      ws.onerror = () => {
-        // Fallback to REST API
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err)
+        clearTimeout(timeoutId)
+        if (!wsTimedOut) {
+          generatePlanFallback()
+        }
+      }
+      
+      ws.onclose = () => {
+        console.log('WebSocket closed')
+      }
+    } catch (err) {
+      console.error('WebSocket setup error:', err)
+      clearTimeout(timeoutId)
+      if (!wsTimedOut) {
         generatePlanFallback()
       }
-    } catch {
-      generatePlanFallback()
     }
   }
 
   const generatePlanFallback = async () => {
+    console.log('Using REST API fallback for planning')
     // Fallback: Use REST API to generate plan
     setOverview(`Planning "${projectName}" - generating tasks for all roles...`)
     
     for (const role of ['pm', 'dev', 'designer'] as Role[]) {
+      console.log(`Generating tasks for ${role}...`)
       setCurrentStreamRole(role)
       try {
         const response = await api.generateTasks(projectName, role)
+        console.log(`Got ${role} tasks:`, response)
         const tasks: Task[] = (response.tasks || []).map((t: any, i: number) => ({
           id: `${role}-${i}-${Date.now()}`,
           title: t.title,
