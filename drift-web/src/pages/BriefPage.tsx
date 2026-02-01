@@ -205,7 +205,7 @@ export function BriefPage({ brief, userRole, onBack }: BriefPageProps) {
               <span className="text-xs font-bold text-primary-foreground">You</span>
             </div>
             <div className="flex-1 pt-1">
-              <p className="text-sm text-muted-foreground mb-2">Created new brief</p>
+              <p className="text-sm text-muted-foreground mb-2">Created new project</p>
               <div className="p-4 bg-card border border-border rounded-xl">
                 <p className="font-medium">{brief.name}</p>
                 {brief.description && (
@@ -230,7 +230,7 @@ export function BriefPage({ brief, userRole, onBack }: BriefPageProps) {
                   <Loader2 className="size-5 animate-spin text-muted-foreground" />
                   <div>
                     <p className="font-medium">Generating with AI...</p>
-                    <p className="text-sm text-muted-foreground">Analyzing brief and creating {userRole} specs</p>
+                    <p className="text-sm text-muted-foreground">Analyzing project and creating {userRole} specs</p>
                   </div>
                 </div>
               )}

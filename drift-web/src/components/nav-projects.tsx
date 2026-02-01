@@ -39,7 +39,7 @@ export function NavProjects({
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>Active Briefs</SidebarGroupLabel>
+      <SidebarGroupLabel>Active Projects</SidebarGroupLabel>
       <SidebarMenu>
         {projects.map((item) => (
           <SidebarMenuItem key={item.name}>
@@ -70,16 +70,16 @@ export function NavProjects({
               >
                 <DropdownMenuItem onClick={item.onClick}>
                   <Folder className="text-muted-foreground" />
-                  <span>View Brief</span>
+                  <span>View Project</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem>
                   <Share className="text-muted-foreground" />
-                  <span>Share Brief</span>
+                  <span>Share Project</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem>
                   <Trash2 className="text-muted-foreground" />
-                  <span>Archive Brief</span>
+                  <span>Archive Project</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -88,7 +88,7 @@ export function NavProjects({
         {projects.length === 0 && (
           <SidebarMenuItem>
             <SidebarMenuButton disabled>
-              <span className="text-muted-foreground text-xs">No active briefs</span>
+              <span className="text-muted-foreground text-xs">No active projects</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         )}

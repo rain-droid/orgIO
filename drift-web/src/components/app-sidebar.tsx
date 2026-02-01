@@ -56,7 +56,7 @@ export function AppSidebar({
       onClick: () => onViewChange?.('home'),
     },
     {
-      title: "Briefs",
+      title: "Projects",
       url: "#",
       icon: FileText,
       isActive: currentView === 'briefs',

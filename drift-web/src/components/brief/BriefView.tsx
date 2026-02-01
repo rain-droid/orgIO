@@ -64,7 +64,7 @@ export function BriefView({
     <section className="brief-view">
       <div className="brief-header card">
         <button className="btn ghost" onClick={onBack}>
-          ← Briefs
+          ← Projects
         </button>
         <div className="brief-title">
           <h2>{brief.name}</h2>

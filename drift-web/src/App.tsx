@@ -231,7 +231,7 @@ export default function App() {
               Drift
             </h1>
             <p className="text-xl text-muted-foreground max-w-md mx-auto">
-              One brief. Three views. Zero meetings.
+              One project. Three views. Zero meetings.
             </p>
           </div>
           <div className="space-y-4">
@@ -305,7 +305,7 @@ export default function App() {
               <div className="relative bg-card border border-border rounded-lg p-4 input-glow transition-all">
                 <input
                   type="text"
-                  placeholder="Plan a new brief for Drift to handle..."
+                  placeholder="Plan a new project for Drift to handle..."
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleCreateBrief()}
@@ -335,7 +335,7 @@ export default function App() {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <h2 className="font-semibold">Active Briefs</h2>
+                      <h2 className="font-semibold">Active Projects</h2>
                       <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                         {briefs.filter(b => b.status === 'active').length}
                       </span>
@@ -366,7 +366,7 @@ export default function App() {
                     ))}
                     {briefs.filter(b => b.status === 'active').length === 0 && (
                       <div className="p-8 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">
-                        No active briefs yet
+                        No active projects yet
                       </div>
                     )}
                   </div>
@@ -501,7 +501,7 @@ export default function App() {
         {deleteConfirm && (
           <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="bg-card border border-border rounded-lg p-6 max-w-sm w-full mx-4 animate-slideUp">
-              <h3 className="font-semibold mb-2">Delete Brief?</h3>
+              <h3 className="font-semibold mb-2">Delete Project?</h3>
               <p className="text-sm text-muted-foreground mb-6">This action cannot be undone.</p>
               <div className="flex gap-2 justify-end">
                 <Button variant="ghost" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
