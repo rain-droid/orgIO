@@ -67,6 +67,8 @@ async def verify_clerk_token(token: str) -> dict:
         user_id = payload.get("sub")
         org_id = payload.get("org_id")
         
+        print(f"[AUTH] SUCCESS: user_id={user_id}, org_id={org_id}")
+        
         # Clerk session tokens have limited claims
         # For full user data, we'd need to call the Clerk API
         return {
@@ -78,6 +80,7 @@ async def verify_clerk_token(token: str) -> dict:
         }
         
     except jwt.ExpiredSignatureError:
+        print(f"[AUTH] REJECTED: Token expired")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
@@ -86,6 +89,7 @@ async def verify_clerk_token(token: str) -> dict:
             }
         )
     except jwt.InvalidTokenError as e:
+        print(f"[AUTH] REJECTED: Invalid token - {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
@@ -94,6 +98,7 @@ async def verify_clerk_token(token: str) -> dict:
             }
         )
     except Exception as e:
+        print(f"[AUTH] REJECTED: Exception - {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
@@ -116,7 +121,10 @@ async def get_current_user(authorization: str) -> dict:
     Raises:
         HTTPException: If auth fails
     """
+    print(f"[AUTH] Received authorization header: {authorization[:50] if authorization else 'None'}...")
+    
     if not authorization or not authorization.startswith("Bearer "):
+        print(f"[AUTH] REJECTED: Missing or invalid header format")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
@@ -126,4 +134,5 @@ async def get_current_user(authorization: str) -> dict:
         )
     
     token = authorization.replace("Bearer ", "")
+    print(f"[AUTH] Token length: {len(token)}, starts with: {token[:20]}...")
     return await verify_clerk_token(token)

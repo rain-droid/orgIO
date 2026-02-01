@@ -42,8 +42,14 @@ def _upsert_user(user: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.get("/users/me")
-async def get_me(authorization: str = Header(...)):
+async def get_me(authorization: str = Header(None)):
     """Return current user profile and ensure user exists in DB."""
+    print(f"[USERS/ME] Called with auth header: {authorization[:50] if authorization else 'MISSING'}...")
+    if not authorization:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "UNAUTHORIZED", "message": "No Authorization header provided"}
+        )
     user = await get_current_user(authorization)
     return _upsert_user(user)
 
