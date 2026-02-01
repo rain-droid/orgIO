@@ -29,7 +29,7 @@ function LoginScreen() {
         <div className="login-left">
           <div className="login-card">
             <div className="login-logo">
-              <div className="login-logo-mark">D</div>
+              <img src="./assets/orgio-logo.png" alt="Orgio" className="login-logo-img" style={{ width: '40px', height: '40px', borderRadius: '8px' }} />
               <span>Orgio</span>
             </div>
 

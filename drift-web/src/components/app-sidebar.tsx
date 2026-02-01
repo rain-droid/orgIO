@@ -111,9 +111,7 @@ export function AppSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <a href="#" onClick={() => onViewChange?.('home')}>
-                <div className="bg-foreground text-background flex aspect-square size-8 items-center justify-center">
-                  <span className="font-bold text-sm">O</span>
-                </div>
+                <img src="/orgio-logo.png" alt="Orgio" className="size-8 rounded" />
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">Orgio</span>
                   <span className="truncate text-xs text-muted-foreground font-mono">
