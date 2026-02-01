@@ -45,7 +45,7 @@ class AICopilot:
             model="gpt-4o",
             temperature=0.7,
             streaming=True,
-            api_key=settings.openai_api_key
+            api_key=settings.OPENAI_API_KEY
         )
         self.conversations: Dict[str, list] = {}  # user_id -> messages
     
@@ -300,7 +300,7 @@ Return a JSON object with this structure:
 
 Generate 5-10 actionable tasks appropriate for a {role}."""
 
-    llm = ChatOpenAI(model="gpt-4o", temperature=0.7, api_key=settings.openai_api_key)
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.7, api_key=settings.OPENAI_API_KEY)
     response = await llm.ainvoke([{"role": "user", "content": prompt}])
     
     # Parse JSON
@@ -391,7 +391,7 @@ Format as structured markdown."""
     
     prompt = prompts.get(role, prompts["dev"])
     
-    llm = ChatOpenAI(model="gpt-4o", temperature=0.7, api_key=settings.openai_api_key)
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.7, api_key=settings.OPENAI_API_KEY)
     response = await llm.ainvoke([{"role": "user", "content": prompt}])
     
     return {

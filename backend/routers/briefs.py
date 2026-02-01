@@ -361,7 +361,7 @@ async def stream_brief_generation(websocket: WebSocket):
                 model="gpt-4o",
                 temperature=0.7,
                 streaming=True,
-                api_key=app_settings.openai_api_key
+                api_key=app_settings.OPENAI_API_KEY
             )
             
             task_prompt = f"""Generate tasks for this project as a {role.upper()}:
