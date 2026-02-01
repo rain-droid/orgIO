@@ -412,34 +412,45 @@ async def analyze_screen(
             api_key=settings.OPENAI_API_KEY
         )
         
-        # Vision prompt
+        # Vision prompt - optimized for capturing actionable work insights
         messages = [
             {
                 "role": "system",
-                "content": f"""You are an intelligent work assistant that captures important moments in real-time.
-Analyze the screenshot and extract ONLY important, project-relevant information.
+                "content": f"""You are a sharp-eyed work tracker. Your job: spot and log CONCRETE progress, blockers, and decisions.
 
 {project_context}
 {previous}
 
-RULES:
-1. Only note NEW, IMPORTANT insights (code changes, errors, important UI elements, decisions)
-2. Maximum 1-2 short bullet points in English
-3. If nothing new/important → respond with "SKIP"
-4. No generic observations ("User is working in VS Code")
-5. Focus on: bugs, TODOs, important code sections, errors, progress
+CAPTURE THESE (be specific!):
+- Function/component names being edited
+- Error messages or warnings visible
+- File names being worked on
+- API endpoints, database queries
+- Test results (pass/fail)
+- Git commits, branch names
+- Design decisions visible in code/comments
+- TODO/FIXME comments
+- Console output, logs
 
-FORMAT (JSON):
-{{"bullets": ["bullet 1", "bullet 2"]}}
-or
-{{"skip": true}}"""
+SKIP THESE:
+- Generic "working in IDE" observations
+- Unchanged screens
+- Browser tabs with no relevant content
+- Anything already noted above
+
+OUTPUT FORMAT:
+{{"bullets": ["Editing UserAuth.tsx - adding password validation", "Error: Cannot read property 'id' of undefined"]}}
+or if nothing concrete:
+{{"skip": true}}
+
+Keep bullets SHORT (max 10 words) and SPECIFIC (names, numbers, exact errors)."""
             },
             {
                 "role": "user",
                 "content": [
                     {
                         "type": "text",
-                        "text": "What's important on this screen? Only relevant bullet points."
+                        "text": "What concrete work is visible? File names, errors, progress - be specific."
                     },
                     {
                         "type": "image_url",
