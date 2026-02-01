@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, status, Query
 from typing import Optional, Dict, Any
 from models.schemas import BriefCreate
-from services.clerk_auth import get_current_user
+from services.clerk_auth import get_current_user, verify_clerk_token
 from services.supabase_client import get_supabase
 from services.agent_manager import get_agent_manager, AgentManager
 
