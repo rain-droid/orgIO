@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { Button } from '../ui/button'
 import { useUIActor } from '../../state/UIStateProvider'
 import { useSelector } from '@xstate/react'
-import { SessionChat } from './SessionChat'
+import { SessionActivity } from './SessionActivity'
 
 type ShortcutAction = 'toggleOverlay' | 'submitChat' | 'toggleSession' | 'toggleVoice' | 'escape'
 type ShortcutConfig = Record<ShortcutAction, string>
@@ -230,14 +230,14 @@ export const Mainbar = () => {
   const [shortcutError, setShortcutError] = useState<string | null>(null)
   const [isVoiceActive, setIsVoiceActive] = useState(false)
   const [currentActivity, setCurrentActivity] = useState<string | null>(null)
-  const [showSessionChat, setShowSessionChat] = useState(false)
-  const [sessionChatPosition, setSessionChatPosition] = useState({ top: 0, left: 0 })
+  const [showSessionActivity, setShowSessionActivity] = useState(false)
+  const [sessionActivityPosition, setSessionActivityPosition] = useState({ top: 0, left: 0 })
   const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null)
   const [sessionEnded, setSessionEnded] = useState(false) // Track if session just ended
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const activitiesRef = useRef<Array<{ app: string; title: string; duration: number; timestamp: number }>>([])
   const dropdownRef = useRef<HTMLDivElement>(null)
-  const sessionChatButtonRef = useRef<HTMLButtonElement>(null)
+  const sessionActivityButtonRef = useRef<HTMLButtonElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
   const settingsButtonRef = useRef<HTMLButtonElement>(null)
@@ -294,14 +294,14 @@ export const Mainbar = () => {
   
   // Update session chat position
   useEffect(() => {
-    if (showSessionChat && sessionChatButtonRef.current) {
-      const rect = sessionChatButtonRef.current.getBoundingClientRect()
-      setSessionChatPosition({
+    if (showSessionActivity && sessionActivityButtonRef.current) {
+      const rect = sessionActivityButtonRef.current.getBoundingClientRect()
+      setSessionActivityPosition({
         top: rect.bottom + 8,
         left: Math.max(8, rect.left - 150) // Center it roughly
       })
     }
-  }, [showSessionChat])
+  }, [showSessionActivity])
 
   // Close menus on outside click
   useEffect(() => {
@@ -529,7 +529,7 @@ export const Mainbar = () => {
             setSessionSummary(null)
             setSessionEnded(false)
             setIsRecording(true)
-            setShowSessionChat(true)
+            setShowSessionActivity(true)
           }
         }
       } else {
@@ -548,7 +548,7 @@ export const Mainbar = () => {
             activitySummary: result.activitySummary,
             notes: result.notes
           })
-          setShowSessionChat(true)
+          setShowSessionActivity(true)
         }
       }
     }
@@ -598,7 +598,7 @@ export const Mainbar = () => {
           setSessionSummary(null)
           setSessionEnded(false)
           setIsRecording(true)
-          setShowSessionChat(true) // Open chat when session starts
+          setShowSessionActivity(true) // Open chat when session starts
         } else {
           console.error('Failed to start session:', result?.error)
         }
@@ -620,7 +620,7 @@ export const Mainbar = () => {
           activitySummary: result.activitySummary,
           notes: result.notes
         })
-        setShowSessionChat(true) // Make sure chat is open to show summary
+        setShowSessionActivity(true) // Make sure chat is open to show summary
       } else {
         console.error('Failed to end session:', result?.error)
       }
@@ -724,13 +724,13 @@ export const Mainbar = () => {
     window.open(submissionUrl, '_blank')
     
     // Close the chat and reset
-    setShowSessionChat(false)
+    setShowSessionActivity(false)
     setSessionSummary(null)
     setSessionEnded(false)
   }
 
-  const handleCloseSessionChat = () => {
-    setShowSessionChat(false)
+  const handleCloseSessionActivity = () => {
+    setShowSessionActivity(false)
     // If session has ended, also clear the summary
     if (sessionEnded) {
       setSessionSummary(null)
@@ -894,10 +894,10 @@ export const Mainbar = () => {
           {/* Show activity button during recording OR when session ended with summary */}
           {(isRecording || sessionEnded) && (
             <Button
-              ref={sessionChatButtonRef}
-              variant={showSessionChat ? 'secondary' : 'ghost'}
+              ref={sessionActivityButtonRef}
+              variant={showSessionActivity ? 'secondary' : 'ghost'}
               size="xs"
-              onClick={() => setShowSessionChat(!showSessionChat)}
+              onClick={() => setShowSessionActivity(!showSessionActivity)}
               title={sessionEnded ? "View Session Summary" : "Session Activity & Notes"}
             >
               <Activity size={12} />
@@ -1005,18 +1005,18 @@ export const Mainbar = () => {
       </div>
       
       {/* Session Chat Portal - show during recording OR when session just ended with summary */}
-      {showSessionChat && (isRecording || sessionEnded) && createPortal(
+      {showSessionActivity && (isRecording || sessionEnded) && createPortal(
         <div
           style={{
             position: 'fixed',
-            top: sessionChatPosition.top,
-            left: sessionChatPosition.left,
+            top: sessionActivityPosition.top,
+            left: sessionActivityPosition.left,
             zIndex: 9999
           }}
         >
-          <SessionChat 
+          <SessionActivity 
             isVisible={true} 
-            onClose={handleCloseSessionChat}
+            onClose={handleCloseSessionActivity}
             sessionSummary={sessionSummary}
             onAddToWorkspace={handleAddToWorkspace}
           />

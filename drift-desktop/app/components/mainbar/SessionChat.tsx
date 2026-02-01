@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, FileCode, Clock, Eye, EyeOff, ChevronDown, ChevronUp, Sparkles, CheckCircle, Upload, X, Bot, Loader2, Trash2, AlertTriangle, ListChecks, Plus, ExternalLink } from 'lucide-react'
+import { Send, FileCode, Clock, Eye, EyeOff, ChevronDown, ChevronUp, Sparkles, CheckCircle, Upload, Bot, Loader2, Trash2, AlertTriangle, ListChecks, Plus, ExternalLink } from 'lucide-react'
 import { Button } from '../ui/button'
 
 interface ActivityEntry {
@@ -52,7 +52,7 @@ interface SessionChatProps {
   onAddToWorkspace?: (summary: SessionSummaryData) => void
 }
 
-export function SessionChat({ isVisible, onClose, sessionSummary, onAddToWorkspace }: SessionChatProps) {
+export function SessionChat({ isVisible, sessionSummary, onAddToWorkspace }: SessionChatProps) {
   const [messages, setMessages] = useState<SessionMessage[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isExpanded, setIsExpanded] = useState(true)
