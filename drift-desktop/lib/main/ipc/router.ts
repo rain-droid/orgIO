@@ -5,6 +5,7 @@ import { windowRegistry } from '@/lib/main/windowRegistry'
 import { activityTracker } from '@/lib/main/activityTracker'
 import { createServer, Server } from 'http'
 import { parse } from 'url'
+import axios from 'axios'
 
 // Persistent store for auth - lazy loaded
 let store: any = null
@@ -16,7 +17,7 @@ const getStore = async () => {
   return store
 }
 
-// Drift Backend API URL - use test domain or fall back to IP
+// Drift Backend API URL - use environment variable or default to GCP server
 const DRIFT_API_URL = process.env.DRIFT_API_URL || 'https://test.usehavoc.com/api'
 
 interface IpcContext {
@@ -195,29 +196,24 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       // 2. Send to Drift backend
       const s = await getStore()
       const authToken = s.get('authToken')
-      const response = await fetch(`${DRIFT_API_URL}/chat`, {
-        method: 'POST',
+      const response = await axios.post(`${DRIFT_API_URL}/chat`, {
+        message: input,
+        screenshot: screenshotBase64
+      }, {
         headers: {
           'Content-Type': 'application/json',
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
         },
-        body: JSON.stringify({
-          message: input,
-          screenshot: screenshotBase64
-        }),
-        signal: apiRequestController.signal
+        signal: apiRequestController.signal,
+        timeout: 30000
       })
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
-      }
-
-      const data = await response.json()
+      const data = response.data
       broadcast('api-success')
       broadcast('chat:chunk', { text: data.response || data.message })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Drift API error:', error)
-      broadcast('api-error', String(error))
+      broadcast('api-error', String(error.message || error))
     }
   })
 
@@ -244,21 +240,18 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     }
     
     try {
-      const response = await fetch(`${DRIFT_API_URL}/desktop/session/start`, {
-        method: 'POST',
+      const response = await axios.post(`${DRIFT_API_URL}/desktop/session/start`, {
+        briefId,
+        role
+      }, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authToken}`
         },
-        body: JSON.stringify({ briefId, role })
+        timeout: 10000
       })
       
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Session start failed: ${response.status} - ${errorText}`)
-      }
-      
-      const data = await response.json()
+      const data = response.data
       activeSessionId = data.sessionId
       activeSessionBriefId = data.briefId || briefId
       activeSessionBriefName = data.briefName || 'Project'
@@ -296,22 +289,19 @@ export function registerIpcHandlers(ctx: IpcContext): void {
           
           const screenshot = sources[0].thumbnail.toJPEG(50).toString('base64')
           
-          const resp = await fetch(`${DRIFT_API_URL}/desktop/session/analyze-screen`, {
-            method: 'POST',
+          const resp = await axios.post(`${DRIFT_API_URL}/desktop/session/analyze-screen`, {
+            screenshot,
+            projectName: currentProjectName,
+            previousInsights: previousInsights.slice(-10)
+          }, {
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({
-              screenshot,
-              projectName: currentProjectName,
-              previousInsights: previousInsights.slice(-10)
-            })
+            timeout: 15000
           })
           
-          if (!resp.ok) return
-          
-          const result = await resp.json()
+          const result = resp.data
           
           if (result.bullets && result.bullets.length > 0 && !result.skip) {
             previousInsights.push(...result.bullets)
@@ -333,9 +323,12 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       
       broadcast('session:started', data)
       return data
-    } catch (error) {
-      console.error('Session start error:', error)
-      return { error: String(error) }
+    } catch (error: any) {
+      console.error('Session start error:', error.message)
+      if (error.response) {
+        return { error: `API Error: ${error.response.status} - ${JSON.stringify(error.response.data)}` }
+      }
+      return { error: error.message || String(error) }
     }
   })
 
@@ -651,6 +644,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   /* ---------------- Sync with Drift backend ---------------- */
   ipcMain.handle('drift:sync', async () => {
     console.log('[drift:sync] Starting sync...')
+    console.log('[drift:sync] API URL:', DRIFT_API_URL)
     const s = await getStore()
     const authToken = s.get('authToken')
     
@@ -659,38 +653,40 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       return { error: 'Not authenticated' }
     }
     
-    console.log('[drift:sync] Auth token found, calling API:', DRIFT_API_URL)
+    console.log('[drift:sync] Auth token found, calling API:', `${DRIFT_API_URL}/desktop/sync`)
     
     try {
-      const response = await fetch(`${DRIFT_API_URL}/desktop/sync`, {
-        method: 'POST',
+      const response = await axios.post(`${DRIFT_API_URL}/desktop/sync`, {
+        userId: 'from-token'
+      }, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authToken}`
         },
-        body: JSON.stringify({
-          userId: 'from-token' // Backend extracts real userId from token
-        })
+        timeout: 10000
       })
       
       console.log('[drift:sync] Response status:', response.status)
+      const data = response.data
       
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.log('[drift:sync] ❌ API error:', response.status, errorText)
-        throw new Error(`Sync failed: ${response.status} - ${errorText}`)
-      }
-      
-      const data = await response.json()
       console.log('[drift:sync] ✅ Success! Briefs:', data.briefs?.length || 0, 'Role:', data.role)
       if (data.briefs?.length > 0) {
         console.log('[drift:sync] Projects:', data.briefs.map((b: any) => b.name).join(', '))
       }
       broadcast('drift:synced', data)
       return data
-    } catch (error) {
-      console.error('[drift:sync] ❌ Error:', error)
-      return { error: String(error) }
+    } catch (error: any) {
+      console.error('[drift:sync] ❌ Error:', error.message)
+      if (error.response) {
+        console.error('[drift:sync] Response error:', error.response.status, error.response.data)
+        return { error: `API Error: ${error.response.status} - ${JSON.stringify(error.response.data)}` }
+      } else if (error.request) {
+        console.error('[drift:sync] No response received:', error.request)
+        return { error: 'Keine Verbindung zum Server möglich. Bitte prüfe deine Internetverbindung.' }
+      } else {
+        console.error('[drift:sync] Request setup error:', error.message)
+        return { error: error.message }
+      }
     }
   })
 

@@ -144,7 +144,7 @@ async def sync_desktop_state(
     }
 
 
-@router.post("/desktop/session/start")
+  @router.post("/desktop/session/start")
 async def start_session(
     request: SessionStartRequest,
     authorization: str = Header(...)
@@ -205,8 +205,8 @@ async def start_session(
             },
             org_id
         )
-    except:
-        pass  # WebSocket notification is optional
+    except Exception as e:
+        print(f"WebSocket broadcast error: {e}")
     
     return {
         "sessionId": session_id,

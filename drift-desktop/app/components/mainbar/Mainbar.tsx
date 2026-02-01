@@ -341,29 +341,35 @@ export const Mainbar = () => {
     setIsLoadingProjects(true)
     setSyncError(null)
     try {
+      console.log('[Mainbar] Fetching projects...')
       const result = await window.api.invoke('drift:sync')
+      console.log('[Mainbar] Sync result:', result)
+      
       if (result && !result.error) {
-        setProjects(result.briefs || [])
+        const briefs = result.briefs || []
+        console.log('[Mainbar] Got', briefs.length, 'projects')
+        setProjects(briefs)
         setUserRole(result.role || 'dev')
         // Auto-select first project if none selected
-        if (!selectedProject && result.briefs?.length > 0) {
-          setSelectedProject(result.briefs[0].id)
+        if (!selectedProject && briefs.length > 0) {
+          console.log('[Mainbar] Auto-selecting first project:', briefs[0].name)
+          setSelectedProject(briefs[0].id)
         }
       } else if (result?.error) {
-        console.error('Sync error:', result.error)
-        if (result.error.includes('Not authenticated')) {
+        console.error('[Mainbar] Sync error:', result.error)
+        if (result.error.includes('Not authenticated') || result.error.includes('401')) {
           setSyncError('auth')
         } else {
           setSyncError('error')
         }
       }
     } catch (error) {
-      console.error('Failed to fetch projects:', error)
+      console.error('[Mainbar] Failed to fetch projects:', error)
       setSyncError('error')
     } finally {
       setIsLoadingProjects(false)
     }
-  }, [selectedProject])
+  }, [])
 
   useEffect(() => {
     fetchProjects()
@@ -585,23 +591,36 @@ export const Mainbar = () => {
         projectId = projects[0].id
         setSelectedProject(projectId)
       }
+      
+      if (!projectId) {
+        console.error('[Session] No project selected and no projects available')
+        alert('Bitte wähle zuerst ein Projekt aus oder erstelle eins im Web-Interface.')
+        return
+      }
+      
       setShowProjectDropdown(false)
       
-      if (projectId) {
-        const result = await window.api.invoke('session:start', projectId, userRole)
-        if (result && !result.error) {
-          activitiesRef.current = []
-          setSessionSummary(null)
-          setSessionEnded(false)
-          setIsRecording(true)
-          setShowSessionChat(true) // Open chat when session starts
-        } else {
-          console.error('Failed to start session:', result?.error)
-        }
+      console.log('[Session] Starting session for project:', projectId, 'role:', userRole)
+      const result = await window.api.invoke('session:start', projectId, userRole)
+      console.log('[Session] Start result:', result)
+      
+      if (result && !result.error) {
+        activitiesRef.current = []
+        setSessionSummary(null)
+        setSessionEnded(false)
+        setIsRecording(true)
+        setShowSessionChat(true) // Open chat when session starts
+        console.log('[Session] ✅ Session started successfully')
+      } else {
+        console.error('[Session] ❌ Failed to start session:', result?.error)
+        alert(`Session konnte nicht gestartet werden: ${result?.error || 'Unbekannter Fehler'}`)
       }
     } else {
       // End session
+      console.log('[Session] Ending session...')
       const result = await window.api.invoke('session:end')
+      console.log('[Session] End result:', result)
+      
       if (result && !result.error) {
         setIsRecording(false)
         setSessionEnded(true)
@@ -615,8 +634,10 @@ export const Mainbar = () => {
           notes: result.notes
         })
         setShowSessionChat(true) // Make sure chat is open to show summary
+        console.log('[Session] ✅ Session ended successfully')
       } else {
-        console.error('Failed to end session:', result?.error)
+        console.error('[Session] ❌ Failed to end session:', result?.error)
+        alert(`Session konnte nicht beendet werden: ${result?.error || 'Unbekannter Fehler'}`)
       }
     }
   }
