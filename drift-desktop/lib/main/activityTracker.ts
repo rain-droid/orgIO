@@ -25,55 +25,18 @@ export interface ManualNote {
   timestamp: number
 }
 
-// Role-specific relevant apps
-const ROLE_RELEVANT_APPS: Record<string, string[]> = {
-  dev: [
-    // Code Editors
-    'code', 'cursor', 'webstorm', 'intellij', 'pycharm', 'sublime', 'atom', 'notepad++', 'vim', 'nvim', 'neovim',
-    // Terminals
-    'terminal', 'iterm', 'powershell', 'cmd', 'windowsterminal', 'hyper', 'alacritty', 'warp',
-    // Git
-    'github', 'gitlab', 'sourcetree', 'gitkraken', 'fork',
-    // Documentation (when coding related)
-    'stackoverflow', 'developer.', 'docs.', 'mdn', 'npm', 'pypi',
-    // Databases
-    'datagrip', 'dbeaver', 'tableplus', 'mongodb', 'redis',
-    // Docker
-    'docker', 'kubernetes', 'lens',
-    // API
-    'postman', 'insomnia', 'httpie',
-  ],
-  pm: [
-    // Project Management
-    'jira', 'asana', 'trello', 'monday', 'notion', 'clickup', 'linear',
-    // Documentation
-    'confluence', 'google docs', 'google sheets', 'excel', 'word',
-    // Communication
-    'slack', 'teams', 'discord', 'zoom', 'meet',
-    // Design Review
-    'figma', 'miro',
-  ],
-  designer: [
-    // Design Tools
-    'figma', 'sketch', 'adobe xd', 'invision', 'framer',
-    // Image Editing
-    'photoshop', 'illustrator', 'affinity', 'gimp', 'inkscape',
-    // Prototyping
-    'principle', 'protopie', 'origami',
-    // Asset Management
-    'zeplin', 'abstract',
-    // 3D
-    'blender', 'cinema 4d', 'spline',
-  ]
-}
+// Apps that are ALWAYS relevant (work tools)
 
-// Irrelevant apps/sites for ALL roles
+// Sites/apps that are NEVER relevant (distractions)
 const ALWAYS_IRRELEVANT = [
   'youtube', 'netflix', 'twitch', 'spotify', 'tiktok', 'instagram', 'facebook', 'twitter', 'x.com',
   'reddit', 'hacker news', '9gag', 'imgur',
-  'steam', 'epic games', 'battle.net', 'origin',
-  'whatsapp', 'telegram', 'signal', // personal messaging
+  'steam', 'epic games', 'battle.net', 'origin', 'riot',
+  'whatsapp', 'telegram', 'signal',
+  'tinder', 'bumble',
 ]
+
+// Legacy - keep for backwards compatibility
 
 // Known code editors and their title patterns
 const CODE_EDITORS: Record<string, { pattern: RegExp; fileGroup: number }> = {
@@ -178,33 +141,16 @@ class ActivityTracker {
     const titleLower = title.toLowerCase()
     const combined = `${appLower} ${titleLower}`
     
-    // First check if it's always irrelevant
+    // Check if it's a distraction (ALWAYS_IRRELEVANT)
     for (const irrelevant of ALWAYS_IRRELEVANT) {
-      if (combined.includes(irrelevant)) {
+      if (combined.includes(irrelevant.toLowerCase())) {
         return false
       }
     }
     
-    // Then check if it matches role-specific apps
-    const relevantApps = ROLE_RELEVANT_APPS[this.role] || ROLE_RELEVANT_APPS.dev
-    
-    for (const relevant of relevantApps) {
-      if (combined.includes(relevant.toLowerCase())) {
-        return true
-      }
-    }
-    
-    // For browsers, check the title more carefully
-    const browsers = ['chrome', 'firefox', 'safari', 'edge', 'arc', 'brave', 'opera']
-    const isBrowser = browsers.some(b => appLower.includes(b))
-    
-    if (isBrowser) {
-      // Only relevant if title contains something work-related
-      return relevantApps.some(rel => titleLower.includes(rel.toLowerCase()))
-    }
-    
-    // Default: consider file managers, unknown apps as somewhat relevant
-    return false
+    // Everything else is relevant - we want to track work!
+    // The AI will decide what's actually important from screenshots
+    return true
   }
   
   /**
