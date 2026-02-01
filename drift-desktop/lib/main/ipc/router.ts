@@ -278,30 +278,58 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         clearInterval(screenAnalysisInterval)
       }
       
-      // Demo mode: 3 fixed insights at 3s, 6s, 9s
-      const demoInsights = [
-        'Refactoring ActivityTracker component',
-        'Adding TypeScript error handling',
-        'Optimizing screen capture logic'
-      ]
+      // Start continuous screen analysis
+      const analyzeScreen = async () => {
+        const s = await getStore()
+        const authToken = s.get('authToken')
+        
+        if (!authToken || !activityTracker.getStatus().isTracking) {
+          return
+        }
+        
+        try {
+          const primaryDisplay = screen.getPrimaryDisplay()
+          const sources = await desktopCapturer.getSources({
+            types: ['screen'],
+            thumbnailSize: { width: Math.floor(primaryDisplay.size.width / 3), height: Math.floor(primaryDisplay.size.height / 3) }
+          })
+          
+          if (sources.length === 0) return
+          
+          const screenshot = sources[0].thumbnail.toJPEG(50).toString('base64')
+          
+          const response = await fetch(`${DRIFT_API_URL}/desktop/session/analyze-screen`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({
+              screenshot,
+              projectName: currentProjectName,
+              projectDescription: currentProjectDescription,
+              previousInsights: previousInsights.slice(-10)
+            })
+          })
+          
+          if (!response.ok) return
+          
+          const analysisData = await response.json()
+          
+          if (analysisData.bullets && analysisData.bullets.length > 0 && !analysisData.skip) {
+            previousInsights.push(...analysisData.bullets)
+            if (previousInsights.length > 20) {
+              previousInsights = previousInsights.slice(-20)
+            }
+            broadcast('session:screen-insight', { bullets: analysisData.bullets, timestamp: Date.now() })
+          }
+        } catch (error) {
+          console.error('[ScreenAnalysis] Error:', error)
+        }
+      }
       
-      console.log('[Session] Demo mode: sending 3 insights')
-      
-      // Send each insight with delay
-      setTimeout(() => {
-        console.log('[Demo] Insight 1')
-        broadcast('session:screen-insight', { bullets: [demoInsights[0]], timestamp: Date.now() })
-      }, 3000)
-      
-      setTimeout(() => {
-        console.log('[Demo] Insight 2')
-        broadcast('session:screen-insight', { bullets: [demoInsights[1]], timestamp: Date.now() })
-      }, 6000)
-      
-      setTimeout(() => {
-        console.log('[Demo] Insight 3')
-        broadcast('session:screen-insight', { bullets: [demoInsights[2]], timestamp: Date.now() })
-      }, 9000)
+      screenAnalysisInterval = setInterval(analyzeScreen, 15000)
+      analyzeScreen() // Run immediately
       
       broadcast('session:started', data)
       return data
@@ -322,53 +350,7 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     }
   })
 
-  ipcMain.handle('session:end', async (_evt, _activities?: any[], _summary?: string) => {
-    if (!activeSessionId) {
-      return { error: 'No active session' }
-    }
-    
-    console.log('[Demo] Ending session with fake summary')
-    
-    // Stop activity tracking
-    activityTracker.stop()
-    
-    // DEMO MODE: Generate fake summary data
-    const demoActivitySummary = [
-      { app: 'Cursor', files: ['activityTracker.ts', 'router.ts', 'SessionActivity.tsx'], totalDuration: 420 },
-      { app: 'Firefox', files: ['GitHub - IntentPR'], totalDuration: 120 }
-    ]
-    
-    const demoNotes = [
-      { text: 'Refactored activity tracking module', timestamp: Date.now() - 300000 },
-      { text: 'Fixed TypeScript errors', timestamp: Date.now() - 180000 }
-    ]
-    
-    const demoData = {
-      sessionId: activeSessionId,
-      briefId: activeSessionBriefId,
-      briefName: activeSessionBriefName,
-      durationMinutes: 8,
-      summaryLines: [
-        'Refactored ActivityTracker component for better performance',
-        'Added TypeScript error handling across modules',
-        'Optimized screen capture logic for lower CPU usage'
-      ],
-      workspaceSummary: 'Good progress on the ActivityTracker refactoring. Implemented TypeScript error handling and optimized screen capture performance. Code quality improved significantly.',
-      attention: null // No issues!
-    }
-    
-    const briefId = activeSessionBriefId
-    const briefName = activeSessionBriefName
-    activeSessionId = null
-    activeSessionBriefId = null
-    activeSessionBriefName = null
-    
-    broadcast('session:ended', { ...demoData, activitySummary: demoActivitySummary, notes: demoNotes, briefId, briefName })
-    return { ...demoData, activitySummary: demoActivitySummary, notes: demoNotes, briefId, briefName }
-  })
-  
-  // Keep original error handling as separate handler for non-demo
-  ipcMain.handle('session:end-real', async (_evt, _activities?: any[], summary?: string) => {
+  ipcMain.handle('session:end', async (_evt, _activities?: any[], summary?: string) => {
     if (!activeSessionId) {
       return { error: 'No active session' }
     }

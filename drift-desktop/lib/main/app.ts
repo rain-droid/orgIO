@@ -34,7 +34,7 @@ export function createAppWindow(isInvisible = false, t0: number): BrowserWindow 
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   mainWindow.setAlwaysOnTop(true, 'screen-saver', 1)
   
-  // DEMO: Show widget on screenshots (set to true for stealth mode)
+  // Content protection disabled to allow screen sharing
   mainWindow.setContentProtection(false)
 
   // Re-focus when window loses focus to keep it on top

@@ -57,7 +57,7 @@ export function SessionActivity({ isVisible, onClose, sessionSummary, onAddToWor
   const itemsEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Listen for screen insights only (Demo mode: activity tracking disabled)
+  // Listen for screen insights from AI analysis
   useEffect(() => {
     const handleScreenInsight = (data: { bullets: string[]; timestamp: number }) => {
       if (data.bullets && data.bullets.length > 0) {
@@ -71,8 +71,6 @@ export function SessionActivity({ isVisible, onClose, sessionSummary, onAddToWor
       }
     }
 
-    // Demo mode: Don't listen to activity updates to keep "Cursor" fixed
-    // window.api.receive('session:activity', handleActivity)
     window.api.receive('session:screen-insight', handleScreenInsight)
     
     // Reset state for new session

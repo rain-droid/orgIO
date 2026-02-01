@@ -18,7 +18,6 @@ interface BriefViewProps {
   activeRole: Role
   onRoleChange: (role: Role) => void
   onBack: () => void
-  onSimulateSubmission: (briefId: string, role: Role) => void
   onApproveSubmission: (submissionId: string) => void
   onRejectSubmission: (submissionId: string) => void
 }
@@ -49,7 +48,6 @@ export function BriefView({
   activeRole,
   onRoleChange,
   onBack,
-  onSimulateSubmission,
   onApproveSubmission,
   onRejectSubmission,
 }: BriefViewProps) {
@@ -103,12 +101,6 @@ export function BriefView({
               </div>
             )
           })}
-          <div className="progress-actions">
-            <button className="btn" onClick={() => onSimulateSubmission(brief.id, activeRole)}>
-              Simulate Submission
-            </button>
-            <span className="muted">Creates a mock desktop session for review.</span>
-          </div>
         </div>
         <div className="card">
           <h3>Pending Reviews</h3>

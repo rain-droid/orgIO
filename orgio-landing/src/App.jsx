@@ -43,8 +43,8 @@ const OrgioLogo = ({ darkMode }) => (
   </div>
 );
 
-// --- INTERACTIVE DEMO ---
-const InteractiveDemo = ({ darkMode }) => {
+// --- PRODUCT PREVIEW ---
+const ProductPreview = ({ darkMode }) => {
   const [activeRole, setActiveRole] = useState('dev');
   const [features, setFeatures] = useState({ sso: false, analytics: false });
   const [syncing, setSyncing] = useState(false);
@@ -54,7 +54,7 @@ const InteractiveDemo = ({ darkMode }) => {
     // Optimistic UI update
     setFeatures(prev => ({ ...prev, [feature]: !prev[feature] }));
 
-    // Simulate Sync Process
+    // Show sync animation
     setSyncing(true);
     setTimeout(() => {
       setSyncing(false);
@@ -409,8 +409,8 @@ export default function App() {
             </div>
           </div>
 
-          {/* INTERACTIVE DEMO (NEW) */}
-          <InteractiveDemo darkMode={darkMode} />
+          {/* PRODUCT PREVIEW */}
+          <ProductPreview darkMode={darkMode} />
 
         </main>
 
