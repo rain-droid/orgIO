@@ -463,9 +463,39 @@ export function registerIpcHandlers(ctx: IpcContext): void {
     return activityTracker.getActivities()
   })
   
-  ipcMain.handle('session:add-note', (_evt, text: string) => {
+  ipcMain.handle('session:add-note', async (_evt, text: string) => {
+    const s = await getStore()
+    const authToken = s.get('authToken')
+    
+    // If authenticated, process the note through AI
+    if (authToken && text.length > 2) {
+      try {
+        const response = await axios.post(`${DRIFT_API_URL}/desktop/session/process-note`, {
+          note: text,
+          projectName: currentProjectName
+        }, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          timeout: 5000
+        })
+        
+        const processed = response.data
+        if (processed.bullet) {
+          activityTracker.addNote(processed.bullet)
+          broadcast('session:note-processed', { original: text, bullet: processed.bullet })
+          return { ok: true, bullet: processed.bullet, processed: true }
+        }
+      } catch (err) {
+        // Fallback to original note
+        console.log('[Note] Processing failed, using original')
+      }
+    }
+    
+    // Fallback: add original note
     activityTracker.addNote(text)
-    return { ok: true }
+    return { ok: true, bullet: text, processed: false }
   })
   
   ipcMain.handle('session:remove-note', (_evt, text: string) => {

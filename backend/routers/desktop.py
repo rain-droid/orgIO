@@ -72,6 +72,77 @@ class ScreenAnalysisRequest(BaseModel):
     previousInsights: Optional[List[str]] = None  # To avoid repetition
 
 
+class ProcessNoteRequest(BaseModel):
+    """Request to process a raw note into a clean bullet point."""
+    note: str
+    projectName: Optional[str] = None
+    recentActivity: Optional[str] = None  # Context about what user is doing
+
+
+@router.post("/desktop/session/process-note")
+async def process_note(
+    request: ProcessNoteRequest,
+    authorization: str = Header(...)
+):
+    """
+    Process a raw user note into a clean, professional bullet point.
+    Transforms informal notes like "fixed the bug" into "Fixed authentication bug in login flow"
+    """
+    token = authorization.replace("Bearer ", "")
+    await verify_clerk_token(token)
+    
+    if not request.note or len(request.note.strip()) < 2:
+        return {"bullet": request.note, "processed": False}
+    
+    context = ""
+    if request.projectName:
+        context += f"Project: {request.projectName}. "
+    if request.recentActivity:
+        context += f"Recent activity: {request.recentActivity}. "
+    
+    try:
+        llm = ChatOpenAI(
+            model="gpt-4o-mini",  # Fast model for quick processing
+            temperature=0.3,
+            max_tokens=50,
+            api_key=settings.OPENAI_API_KEY
+        )
+        
+        prompt = f"""Transform this raw note into a clean, professional bullet point for a work log.
+
+{context}
+Raw note: "{request.note}"
+
+RULES:
+- Keep it SHORT (max 8 words)
+- Start with action verb (Added, Fixed, Implemented, Created, Updated, etc.)
+- Be specific if possible (include file/function names mentioned)
+- Professional tone
+- If note is already good, keep it similar
+
+Examples:
+- "fixed the bug" → "Fixed authentication bug"
+- "working on api" → "Implementing API endpoints"
+- "done with login" → "Completed login feature"
+- "testing stuff" → "Running tests"
+
+Output ONLY the bullet point, nothing else."""
+
+        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        bullet = response.content.strip().strip('"').strip("'").strip("-").strip("•").strip()
+        
+        # Ensure it starts with capital letter
+        if bullet:
+            bullet = bullet[0].upper() + bullet[1:] if len(bullet) > 1 else bullet.upper()
+        
+        return {"bullet": bullet, "processed": True, "original": request.note}
+        
+    except Exception as e:
+        print(f"Note processing error: {e}")
+        # Fallback: return original note
+        return {"bullet": request.note, "processed": False, "error": str(e)}
+
+
 @router.post("/desktop/sync")
 async def sync_desktop_state(
     request: DesktopSyncRequest,

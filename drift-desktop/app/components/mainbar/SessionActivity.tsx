@@ -129,21 +129,33 @@ export function SessionActivity({ isVisible, onClose, sessionSummary, onAddToWor
     }
   }
 
-  // Handle adding note
+  // Handle adding note - processes through AI for clean bullet point
   const handleAddNote = async () => {
     if (!inputValue.trim()) return
     
     const noteText = inputValue.trim()
     setInputValue('')
     
+    // Add temporary item while processing
+    const tempId = `note-${Date.now()}`
     setItems(prev => [...prev, {
-      id: `note-${Date.now()}`,
+      id: tempId,
       type: 'note',
-      content: noteText,
+      content: noteText + ' ...',
       timestamp: Date.now()
     }])
     
-    await window.api.invoke('session:add-note', noteText)
+    // Process through AI
+    const result = await window.api.invoke('session:add-note', noteText)
+    
+    // Update with processed bullet
+    if (result?.bullet) {
+      setItems(prev => prev.map(item => 
+        item.id === tempId 
+          ? { ...item, content: result.bullet }
+          : item
+      ))
+    }
   }
 
   // Handle delete item
