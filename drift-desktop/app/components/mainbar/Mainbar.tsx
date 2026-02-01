@@ -28,13 +28,59 @@ interface SessionSummary {
   notes?: Array<{ text: string; timestamp: number }>
 }
 
-// Voice Equalizer Component with real mic input
-function VoiceEqualizer({ isActive }: { isActive: boolean }) {
+// Web Speech API type declarations
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList
+  resultIndex: number
+}
+
+interface SpeechRecognitionResultList {
+  length: number
+  item(index: number): SpeechRecognitionResult
+  [index: number]: SpeechRecognitionResult
+}
+
+interface SpeechRecognitionResult {
+  isFinal: boolean
+  length: number
+  item(index: number): SpeechRecognitionAlternative
+  [index: number]: SpeechRecognitionAlternative
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string
+  confidence: number
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  start(): void
+  stop(): void
+  abort(): void
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onerror: ((event: Event) => void) | null
+  onend: (() => void) | null
+  onstart: (() => void) | null
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognition
+    webkitSpeechRecognition: new () => SpeechRecognition
+  }
+}
+
+// Voice Equalizer Component with real mic input and speech recognition
+function VoiceEqualizer({ isActive, onTranscript }: { isActive: boolean; onTranscript?: (text: string) => void }) {
   const [levels, setLevels] = useState([2, 2, 2])
+  const [isListening, setIsListening] = useState(false)
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const animationRef = useRef<number | null>(null)
+  const recognitionRef = useRef<SpeechRecognition | null>(null)
 
   const analyze = useCallback(() => {
     if (!analyserRef.current) return
@@ -56,6 +102,7 @@ function VoiceEqualizer({ isActive }: { isActive: boolean }) {
 
   useEffect(() => {
     if (isActive) {
+      // Start audio visualization
       navigator.mediaDevices.getUserMedia({ audio: true })
         .then((stream) => {
           streamRef.current = stream
@@ -70,23 +117,88 @@ function VoiceEqualizer({ isActive }: { isActive: boolean }) {
           analyze()
         })
         .catch((err) => console.error('Mic access denied:', err))
+
+      // Start speech recognition
+      const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition
+      if (SpeechRecognitionClass) {
+        const recognition = new SpeechRecognitionClass()
+        recognition.continuous = true
+        recognition.interimResults = false
+        recognition.lang = 'de-DE' // German by default, can be made configurable
+        
+        recognition.onresult = (event: SpeechRecognitionEvent) => {
+          const last = event.results.length - 1
+          const transcript = event.results[last][0].transcript.trim()
+          if (transcript && onTranscript) {
+            console.log('[Voice] Transcribed:', transcript)
+            onTranscript(transcript)
+          }
+        }
+        
+        recognition.onerror = (event) => {
+          console.error('[Voice] Recognition error:', event)
+        }
+        
+        recognition.onend = () => {
+          // Restart if still active
+          if (isActive && recognitionRef.current) {
+            try {
+              recognitionRef.current.start()
+            } catch (e) {
+              // Already started
+            }
+          }
+        }
+        
+        recognition.onstart = () => {
+          setIsListening(true)
+        }
+        
+        recognitionRef.current = recognition
+        
+        try {
+          recognition.start()
+        } catch (e) {
+          console.error('[Voice] Failed to start recognition:', e)
+        }
+      } else {
+        console.warn('[Voice] Speech recognition not supported')
+      }
     } else {
-      // Cleanup
+      // Cleanup audio
       if (animationRef.current) cancelAnimationFrame(animationRef.current)
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop())
       if (audioContextRef.current) audioContextRef.current.close()
       setLevels([2, 2, 2])
+      
+      // Cleanup speech recognition
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop()
+        } catch (e) {
+          // Already stopped
+        }
+        recognitionRef.current = null
+      }
+      setIsListening(false)
     }
 
     return () => {
       if (animationRef.current) cancelAnimationFrame(animationRef.current)
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop())
       if (audioContextRef.current) audioContextRef.current.close()
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop()
+        } catch (e) {
+          // Already stopped
+        }
+      }
     }
-  }, [isActive, analyze])
+  }, [isActive, analyze, onTranscript])
 
   return (
-    <div className="flex items-center gap-[2px] h-[10px]">
+    <div className="flex items-center gap-[2px] h-[10px]" title={isListening ? 'Listening...' : 'Starting...'}>
       {levels.map((h, i) => (
         <span
           key={i}
@@ -521,6 +633,19 @@ export const Mainbar = () => {
     setIsVoiceActive(!isVoiceActive)
   }
 
+  // Handle voice transcript - add as session note or send to chat
+  const handleVoiceTranscript = useCallback(async (text: string) => {
+    if (isRecording) {
+      // During session, add as note
+      await window.api.invoke('session:add-note', `🎤 ${text}`)
+      console.log('[Voice] Added note to session:', text)
+    } else {
+      // Not in session, could open chat and send
+      // For now just log it
+      console.log('[Voice] Transcript (no session):', text)
+    }
+  }, [isRecording])
+
   const handleAddToWorkspace = async (summary: SessionSummary) => {
     // Open the web app to the submission review page
     const webUrl = process.env.DRIFT_WEB_URL || 'https://test.usehavoc.com'
@@ -665,7 +790,7 @@ export const Mainbar = () => {
             onClick={handleVoiceClick}
           >
             {isVoiceActive ? (
-              <VoiceEqualizer isActive={isVoiceActive} />
+              <VoiceEqualizer isActive={isVoiceActive} onTranscript={handleVoiceTranscript} />
             ) : (
               <Mic size={12} />
             )}

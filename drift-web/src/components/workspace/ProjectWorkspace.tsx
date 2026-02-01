@@ -61,9 +61,101 @@ export function ProjectWorkspace({ brief, userRole, onBack }: ProjectWorkspacePr
   const [chatMessage, setChatMessage] = useState('')
   const [chatMessages, setChatMessages] = useState<Array<{role: 'user' | 'assistant', content: string}>>([])
   const [chatLoading, setChatLoading] = useState(false)
+  const [recentUpdate, setRecentUpdate] = useState<SessionUpdate | null>(null)
+  const [showUpdateBanner, setShowUpdateBanner] = useState(false)
+  const [projectIssues, setProjectIssues] = useState<string[]>([])
 
   const config = roleConfig[userRole]
   const RoleIcon = config.icon
+
+  // Fetch tasks from API
+  const fetchTasks = useCallback(async () => {
+    try {
+      const token = await getToken()
+      const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/briefs/${brief.id}/tasks`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setTasks(data.tasks || [])
+      }
+    } catch (error) {
+      console.error('Failed to fetch tasks:', error)
+    }
+  }, [brief.id, getToken])
+
+  // Listen for WebSocket updates from desktop sessions
+  useEffect(() => {
+    const wsUrl = `${(import.meta.env.VITE_API_URL || '').replace('http', 'ws')}/ws/workspace`
+    let ws: WebSocket | null = null
+    let reconnectTimeout: ReturnType<typeof setTimeout>
+
+    const connect = async () => {
+      const token = await getToken()
+      ws = new WebSocket(wsUrl)
+      
+      ws.onopen = () => {
+        ws?.send(JSON.stringify({ type: 'authenticate', token }))
+        ws?.send(JSON.stringify({ type: 'subscribe', briefId: brief.id }))
+      }
+      
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          
+          if (data.type === 'workspace:updated' && data.briefId === brief.id) {
+            // Session was analyzed and tasks were updated
+            const update: SessionUpdate = {
+              sessionId: data.sessionId,
+              briefId: data.briefId,
+              updatedTaskIds: data.updatedTaskIds || [],
+              newTaskIds: data.newTaskIds || [],
+              issues: data.issues || [],
+              aiSummary: data.aiSummary || '',
+              timestamp: new Date()
+            }
+            
+            setRecentUpdate(update)
+            setShowUpdateBanner(true)
+            
+            // Add issues to project issues
+            if (update.issues.length > 0) {
+              setProjectIssues(prev => [...update.issues, ...prev].slice(0, 5))
+            }
+            
+            // Refresh tasks
+            fetchTasks()
+            
+            // Mark updated tasks as recently updated
+            setTasks(prev => prev.map(t => ({
+              ...t,
+              wasRecentlyUpdated: update.updatedTaskIds.includes(t.id) || update.newTaskIds.includes(t.id)
+            })))
+            
+            // Clear the highlight after 5 seconds
+            setTimeout(() => {
+              setTasks(prev => prev.map(t => ({ ...t, wasRecentlyUpdated: false })))
+            }, 5000)
+          }
+        } catch (e) {
+          console.error('WebSocket message error:', e)
+        }
+      }
+      
+      ws.onclose = () => {
+        reconnectTimeout = setTimeout(connect, 3000)
+      }
+    }
+    
+    connect()
+    
+    return () => {
+      ws?.close()
+      clearTimeout(reconnectTimeout)
+    }
+  }, [brief.id, getToken, fetchTasks])
 
   // Auto-generate tasks on mount if none exist
   useEffect(() => {
@@ -160,6 +252,39 @@ export function ProjectWorkspace({ brief, userRole, onBack }: ProjectWorkspacePr
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Session Update Banner */}
+      {showUpdateBanner && recentUpdate && (
+        <div className="fixed top-4 right-4 z-50 max-w-md animate-in slide-in-from-top-2">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 shadow-lg">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <Sparkles className="size-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-medium text-emerald-900 text-sm">Workspace Updated</h4>
+                  <p className="text-xs text-emerald-700 mt-1">{recentUpdate.aiSummary}</p>
+                  {recentUpdate.updatedTaskIds.length > 0 && (
+                    <p className="text-xs text-emerald-600 mt-1">
+                      {recentUpdate.updatedTaskIds.length} task(s) updated
+                    </p>
+                  )}
+                  {recentUpdate.newTaskIds.length > 0 && (
+                    <p className="text-xs text-orange-600 mt-1">
+                      {recentUpdate.newTaskIds.length} new task(s) added
+                    </p>
+                  )}
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowUpdateBanner(false)}
+                className="text-emerald-600 hover:text-emerald-800"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="border-b sticky top-0 z-10 bg-background">
         <div className="max-w-6xl mx-auto px-6 py-4">
@@ -186,6 +311,14 @@ export function ProjectWorkspace({ brief, userRole, onBack }: ProjectWorkspacePr
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {projectIssues.length > 0 && (
+                <div className="relative">
+                  <Bell className="size-4 text-orange-500" />
+                  <span className="absolute -top-1 -right-1 size-3 bg-orange-500 rounded-full text-[8px] text-white flex items-center justify-center">
+                    {projectIssues.length}
+                  </span>
+                </div>
+              )}
               <button
                 onClick={() => setChatOpen(!chatOpen)}
                 className={`px-4 py-2 rounded text-sm flex items-center gap-2 transition-colors ${
@@ -207,6 +340,31 @@ export function ProjectWorkspace({ brief, userRole, onBack }: ProjectWorkspacePr
           </div>
         </div>
       </header>
+
+      {/* Issues Banner */}
+      {projectIssues.length > 0 && (
+        <div className="bg-orange-50 border-b border-orange-200">
+          <div className="max-w-6xl mx-auto px-6 py-3">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="size-5 text-orange-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="font-medium text-orange-900 text-sm">Attention Required</h4>
+                <ul className="mt-1 space-y-1">
+                  {projectIssues.map((issue, i) => (
+                    <li key={i} className="text-xs text-orange-700">• {issue}</li>
+                  ))}
+                </ul>
+              </div>
+              <button 
+                onClick={() => setProjectIssues([])}
+                className="text-orange-600 hover:text-orange-800 text-xs"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-6xl mx-auto px-6 py-8 flex gap-6">
         {/* Main Content */}
@@ -346,35 +504,59 @@ export function ProjectWorkspace({ brief, userRole, onBack }: ProjectWorkspacePr
 }
 
 function TaskCard({ task, onToggle }: { task: Task, onToggle: (id: string) => void }) {
+  const isRecentlyUpdated = task.wasRecentlyUpdated
+  
   return (
     <div 
       onClick={() => onToggle(task.id)}
-      className="relative cursor-pointer group"
+      className={`relative cursor-pointer group ${isRecentlyUpdated ? 'animate-pulse' : ''}`}
     >
-      <div aria-hidden className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 border-foreground/30 group-hover:border-foreground/60 transition-colors" />
-      <div aria-hidden className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 border-foreground/30 group-hover:border-foreground/60 transition-colors" />
-      <div aria-hidden className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-foreground/30 group-hover:border-foreground/60 transition-colors" />
-      <div aria-hidden className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-foreground/30 group-hover:border-foreground/60 transition-colors" />
+      {/* Recently updated indicator */}
+      {isRecentlyUpdated && (
+        <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-1 h-8 bg-emerald-500 rounded-full" />
+      )}
+      
+      <div aria-hidden className={`absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 transition-colors ${
+        isRecentlyUpdated ? 'border-emerald-500' : 'border-foreground/30 group-hover:border-foreground/60'
+      }`} />
+      <div aria-hidden className={`absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 transition-colors ${
+        isRecentlyUpdated ? 'border-emerald-500' : 'border-foreground/30 group-hover:border-foreground/60'
+      }`} />
+      <div aria-hidden className={`absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 transition-colors ${
+        isRecentlyUpdated ? 'border-emerald-500' : 'border-foreground/30 group-hover:border-foreground/60'
+      }`} />
+      <div aria-hidden className={`absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 transition-colors ${
+        isRecentlyUpdated ? 'border-emerald-500' : 'border-foreground/30 group-hover:border-foreground/60'
+      }`} />
 
-      <div className="border bg-background p-4 hover:bg-muted/30 transition-colors">
+      <div className={`border bg-background p-4 hover:bg-muted/30 transition-colors ${
+        isRecentlyUpdated ? 'bg-emerald-50/50 border-emerald-200' : ''
+      }`}>
         <div className="flex items-start gap-3">
           <div className={`mt-0.5 ${
             task.status === 'done' ? 'text-foreground' : 
             task.status === 'in_progress' ? 'text-foreground' : 'text-muted-foreground'
           }`}>
             {task.status === 'done' ? (
-              <CheckCircle2 className="size-5" />
+              <CheckCircle2 className={`size-5 ${isRecentlyUpdated ? 'text-emerald-600' : ''}`} />
             ) : task.status === 'in_progress' ? (
-              <Play className="size-5" />
+              <Play className={`size-5 ${isRecentlyUpdated ? 'text-emerald-600' : ''}`} />
             ) : (
               <Circle className="size-5" />
             )}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-4">
-              <h3 className={`font-medium ${task.status === 'done' ? 'line-through text-muted-foreground' : ''}`}>
-                {task.title}
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className={`font-medium ${task.status === 'done' ? 'line-through text-muted-foreground' : ''}`}>
+                  {task.title}
+                </h3>
+                {isRecentlyUpdated && (
+                  <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] rounded uppercase tracking-wide">
+                    Updated
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2 shrink-0">
                 <span className={`px-2 py-0.5 rounded text-xs uppercase tracking-wide ${
                   task.priority === 'high' ? 'bg-red-500/10 text-red-500' :

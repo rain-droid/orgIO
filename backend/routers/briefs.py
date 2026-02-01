@@ -16,6 +16,8 @@ def _map_task(task: Dict[str, Any]) -> Dict[str, Any]:
         "title": task.get("title"),
         "description": task.get("description") or "",
         "status": task.get("status"),
+        "priority": task.get("priority") or "medium",
+        "estimated_hours": task.get("estimated_hours") or 2,
         "createdAt": task.get("created_at")
     }
 
