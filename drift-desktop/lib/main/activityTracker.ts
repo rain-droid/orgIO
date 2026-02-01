@@ -363,48 +363,39 @@ class ActivityTracker {
    * Get active window on Windows using PowerShell
    */
   private async getActiveWindowWindows(): Promise<{ app: string; title: string } | null> {
+    // Apps to ignore (our own app)
+    const IGNORE_APPS = ['electron', 'drift', 'drift-desktop']
+    
     try {
       const { execSync } = await import('child_process')
       
-      // Method 1: Get foreground window directly via user32.dll
-      try {
-        const script = `Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;using System.Text;public class W{[DllImport("user32.dll")]public static extern IntPtr GetForegroundWindow();[DllImport("user32.dll")]public static extern int GetWindowText(IntPtr h,StringBuilder s,int n);[DllImport("user32.dll")]public static extern uint GetWindowThreadProcessId(IntPtr h,out uint p);}' -Language CSharp;$h=[W]::GetForegroundWindow();$t=New-Object Text.StringBuilder 256;[void][W]::GetWindowText($h,$t,256);$i=0;[void][W]::GetWindowThreadProcessId($h,[ref]$i);$n=(Get-Process -Id $i -EA 0).ProcessName;Write-Output "$n|$($t.ToString())"`
-        
-        const result = execSync(`powershell -NoProfile -ExecutionPolicy Bypass -Command "${script}"`, {
-          timeout: 2000,
-          windowsHide: true,
-          encoding: 'utf8'
-        }).toString().trim()
-        
-        if (result && result.includes('|')) {
-          const pipeIndex = result.indexOf('|')
-          const app = result.substring(0, pipeIndex).trim()
-          const title = result.substring(pipeIndex + 1).trim()
-          
-          if (app && app !== '' && app !== 'undefined') {
-            console.log(`[ActivityTracker] Detected: ${app} - ${title.substring(0, 50)}`)
-            return { app, title }
-          }
-        }
-      } catch (e) {
-        console.log('[ActivityTracker] Method 1 failed, trying fallback')
-      }
-      
-      // Method 2: Simple fallback - get most active process
+      // Get all windows with titles, sorted by recent activity
       try {
         const result = execSync(
-          'powershell -NoProfile -Command "(Get-Process | Where-Object {$_.MainWindowTitle -ne \'\'} | Sort-Object CPU -Descending | Select-Object -First 1 | ForEach-Object { $_.ProcessName + \'|\' + $_.MainWindowTitle })"',
-          { timeout: 1500, windowsHide: true, encoding: 'utf8' }
+          'powershell -NoProfile -Command "Get-Process | Where-Object {$_.MainWindowTitle -ne \'\'} | Sort-Object -Property @{Expression={$_.Responding};Descending=$true},@{Expression={$_.CPU};Descending=$true} | Select-Object -First 5 | ForEach-Object { $_.ProcessName + \'|\' + $_.MainWindowTitle }"',
+          { timeout: 2000, windowsHide: true, encoding: 'utf8' }
         ).toString().trim()
         
-        if (result && result.includes('|')) {
-          const [app, title] = result.split('|')
-          if (app) {
-            return { app, title: title || '' }
+        // Parse all results and find first non-ignored app
+        const lines = result.split('\n').filter(l => l.includes('|'))
+        
+        for (const line of lines) {
+          const pipeIndex = line.indexOf('|')
+          const app = line.substring(0, pipeIndex).trim().toLowerCase()
+          const title = line.substring(pipeIndex + 1).trim()
+          
+          // Skip our own app
+          if (IGNORE_APPS.some(ignore => app.includes(ignore))) {
+            continue
           }
+          
+          // Found a valid app!
+          const appName = line.substring(0, pipeIndex).trim()
+          console.log(`[ActivityTracker] Detected: ${appName} - ${title.substring(0, 50)}`)
+          return { app: appName, title }
         }
-      } catch {
-        // Final fallback failed
+      } catch (e) {
+        console.log('[ActivityTracker] PowerShell failed:', e)
       }
       
       return null

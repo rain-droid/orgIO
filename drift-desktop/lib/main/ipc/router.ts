@@ -282,7 +282,16 @@ export function registerIpcHandlers(ctx: IpcContext): void {
         const store = await getStore()
         const token = store.get('authToken')
         
-        if (!token || !activityTracker.getStatus().isTracking) return
+        if (!token) {
+          console.log('[ScreenAnalysis] No auth token, skipping')
+          return
+        }
+        if (!activityTracker.getStatus().isTracking) {
+          console.log('[ScreenAnalysis] Not tracking, skipping')
+          return
+        }
+        
+        console.log('[ScreenAnalysis] Capturing screen...')
         
         try {
           const primaryDisplay = screen.getPrimaryDisplay()
@@ -309,7 +318,10 @@ export function registerIpcHandlers(ctx: IpcContext): void {
           
           const result = resp.data
           
+          console.log('[ScreenAnalysis] Response:', result.skip ? 'SKIP' : result.bullets?.length + ' bullets')
+          
           if (result.bullets && result.bullets.length > 0 && !result.skip) {
+            console.log('[ScreenAnalysis] Bullets:', result.bullets)
             previousInsights.push(...result.bullets)
             if (previousInsights.length > 20) previousInsights = previousInsights.slice(-20)
             
@@ -318,10 +330,15 @@ export function registerIpcHandlers(ctx: IpcContext): void {
               timestamp: Date.now()
             })
           }
-        } catch (err) {
-          // Silent fail for screen analysis
+        } catch (err: any) {
+          console.error('[ScreenAnalysis] Error:', err.message || err)
+          if (err.response) {
+            console.error('[ScreenAnalysis] Status:', err.response.status)
+          }
         }
       }
+      
+      console.log('[Session] Screen analysis started, interval: 8s')
       
       // Analyze screen every 8 seconds
       screenAnalysisInterval = setInterval(analyzeScreenPeriodic, 8000)
