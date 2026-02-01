@@ -1,4 +1,4 @@
-import { Command, CornerDownLeft, Space, GripVertical, LogOut, ChevronDown, FileText, Mic, Settings, Power } from 'lucide-react'
+import { Command, CornerDownLeft, Space, GripVertical, LogOut, ChevronDown, FileText, Mic, Settings, Power, RefreshCw } from 'lucide-react'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '../ui/button'
@@ -9,12 +9,13 @@ type ShortcutAction = 'toggleOverlay' | 'submitChat' | 'toggleSession' | 'toggle
 type ShortcutConfig = Record<ShortcutAction, string>
 type ShortcutUpdateResult = { ok: boolean; failed: ShortcutAction[]; shortcuts: ShortcutConfig }
 
-// Mock projects - later from API
-const MOCK_PROJECTS = [
-  { id: '1', name: 'Apple Pay Checkout' },
-  { id: '2', name: 'User Onboarding Flow' },
-  { id: '3', name: 'Dashboard Redesign' },
-]
+// Project type from API
+interface Project {
+  id: string
+  name: string
+  description?: string
+  status?: string
+}
 
 // Voice Equalizer Component with real mic input
 function VoiceEqualizer({ isActive }: { isActive: boolean }) {
@@ -90,6 +91,9 @@ export const Mainbar = () => {
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [selectedProject, setSelectedProject] = useState<string | null>(null)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false)
+  const [userRole, setUserRole] = useState<string>('dev')
   const [showProjectDropdown, setShowProjectDropdown] = useState(false)
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 })
   const [showSettingsMenu, setShowSettingsMenu] = useState(false)
@@ -101,6 +105,7 @@ export const Mainbar = () => {
   const [shortcutError, setShortcutError] = useState<string | null>(null)
   const [isVoiceActive, setIsVoiceActive] = useState(false)
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const activitiesRef = useRef<Array<{ app: string; title: string; duration: number; timestamp: number }>>([])
   const dropdownRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
@@ -188,6 +193,38 @@ export const Mainbar = () => {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  // Fetch projects from API on mount
+  const fetchProjects = useCallback(async () => {
+    setIsLoadingProjects(true)
+    try {
+      const result = await window.api.invoke('drift:sync')
+      if (result && !result.error) {
+        setProjects(result.briefs || [])
+        setUserRole(result.role || 'dev')
+        // Auto-select first project if none selected
+        if (!selectedProject && result.briefs?.length > 0) {
+          setSelectedProject(result.briefs[0].id)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch projects:', error)
+    } finally {
+      setIsLoadingProjects(false)
+    }
+  }, [selectedProject])
+
+  useEffect(() => {
+    fetchProjects()
+    // Listen for sync events
+    window.api.receive('drift:synced', (data: { briefs: Project[]; role: string }) => {
+      setProjects(data.briefs || [])
+      setUserRole(data.role || 'dev')
+    })
+    return () => {
+      window.api.removeAllListeners('drift:synced')
+    }
+  }, [fetchProjects])
 
   useEffect(() => {
     window.api
@@ -296,19 +333,36 @@ export const Mainbar = () => {
 
   // Listen for toggle-session shortcut
   useEffect(() => {
-    const handleToggleSession = () => {
+    const handleToggleSession = async () => {
       if (!selectedProject) {
         // Shortcut should start immediately; default to first project
-        if (MOCK_PROJECTS.length > 0) {
-          setSelectedProject(MOCK_PROJECTS[0].id)
+        if (projects.length > 0) {
+          setSelectedProject(projects[0].id)
         }
         setShowProjectDropdown(false)
       }
-      setIsRecording((prev) => !prev)
+      
+      if (!isRecording) {
+        // Start session via API
+        const projectId = selectedProject || projects[0]?.id
+        if (projectId) {
+          const result = await window.api.invoke('session:start', projectId, userRole)
+          if (result && !result.error) {
+            activitiesRef.current = []
+            setIsRecording(true)
+          }
+        }
+      } else {
+        // End session via API
+        const result = await window.api.invoke('session:end', activitiesRef.current)
+        if (result && !result.error) {
+          setIsRecording(false)
+        }
+      }
     }
     window.addEventListener('toggle-session', handleToggleSession)
     return () => window.removeEventListener('toggle-session', handleToggleSession)
-  }, [selectedProject])
+  }, [selectedProject, isRecording, projects, userRole])
 
   // Listen for toggle-voice shortcut
   useEffect(() => {
@@ -335,14 +389,34 @@ export const Mainbar = () => {
     return `${minutes}:${secs}`
   }
 
-  const handleSessionClick = () => {
-    if (!isRecording && !selectedProject) {
-      if (MOCK_PROJECTS.length > 0) {
-        setSelectedProject(MOCK_PROJECTS[0].id)
+  const handleSessionClick = async () => {
+    if (!isRecording) {
+      // Start session
+      let projectId = selectedProject
+      if (!projectId && projects.length > 0) {
+        projectId = projects[0].id
+        setSelectedProject(projectId)
       }
       setShowProjectDropdown(false)
+      
+      if (projectId) {
+        const result = await window.api.invoke('session:start', projectId, userRole)
+        if (result && !result.error) {
+          activitiesRef.current = []
+          setIsRecording(true)
+        } else {
+          console.error('Failed to start session:', result?.error)
+        }
+      }
+    } else {
+      // End session
+      const result = await window.api.invoke('session:end', activitiesRef.current)
+      if (result && !result.error) {
+        setIsRecording(false)
+      } else {
+        console.error('Failed to end session:', result?.error)
+      }
     }
-    setIsRecording(!isRecording)
   }
 
   const handleProjectSelect = (projectId: string) => {
@@ -351,8 +425,8 @@ export const Mainbar = () => {
   }
 
   const getSelectedProjectName = () => {
-    const project = MOCK_PROJECTS.find(p => p.id === selectedProject)
-    return project?.name || 'Select Project'
+    const project = projects.find(p => p.id === selectedProject)
+    return project?.name || (isLoadingProjects ? 'Loading...' : 'Select Project')
   }
 
   const handleLogout = () => {
@@ -379,18 +453,34 @@ export const Mainbar = () => {
         zIndex: 9999
       }}
     >
-      {MOCK_PROJECTS.map((project) => (
-        <button
-          key={project.id}
-          onClick={() => handleProjectSelect(project.id)}
-          className={`w-full text-left px-2.5 py-1.5 text-xs flex items-center gap-2 hover:bg-black/5 transition-colors ${
-            selectedProject === project.id ? 'bg-black/5 font-medium' : ''
-          }`}
-        >
-          <FileText size={12} className="text-gray-500 flex-shrink-0" />
-          <span className="truncate">{project.name}</span>
-        </button>
-      ))}
+      {/* Refresh button */}
+      <button
+        onClick={() => fetchProjects()}
+        className="w-full text-left px-2.5 py-1.5 text-xs flex items-center gap-2 hover:bg-black/5 transition-colors text-gray-500"
+        disabled={isLoadingProjects}
+      >
+        <RefreshCw size={12} className={isLoadingProjects ? 'animate-spin' : ''} />
+        <span>{isLoadingProjects ? 'Loading...' : 'Refresh projects'}</span>
+      </button>
+      <div className="h-px bg-black/10 my-1" />
+      {projects.length === 0 ? (
+        <div className="px-2.5 py-2 text-xs text-gray-500 text-center">
+          No projects found.<br />Create one in the web app.
+        </div>
+      ) : (
+        projects.map((project) => (
+          <button
+            key={project.id}
+            onClick={() => handleProjectSelect(project.id)}
+            className={`w-full text-left px-2.5 py-1.5 text-xs flex items-center gap-2 hover:bg-black/5 transition-colors ${
+              selectedProject === project.id ? 'bg-black/5 font-medium' : ''
+            }`}
+          >
+            <FileText size={12} className="text-gray-500 flex-shrink-0" />
+            <span className="truncate">{project.name}</span>
+          </button>
+        ))
+      )}
     </div>,
     document.body
   )

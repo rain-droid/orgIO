@@ -5,7 +5,7 @@ import { useUIState } from './state/UIStateProvider'
 const AI = lazy(() => import('./components/mainbar/AI').then((module) => ({ default: module.AI })))
 
 // Auth URL - opens in browser for login
-const AUTH_URL = 'https://34.185.148.16/auth/desktop'
+const AUTH_URL = 'https://test.usehavoc.com/auth/desktop'
 
 // Login Screen Component - intro -> auth flow
 function LoginScreen() {
