@@ -71,19 +71,16 @@ async def create_brief(
     user = await get_current_user(authorization)
     supabase = get_supabase()
     
-    # Get org_id - priority: request body > token > users table
+    # Get org_id - use provided, token, users table, or fallback to user_id
     org_id = brief_data.orgId or user.get("orgId")
     
     if not org_id:
-        # Try to get org_id from users table
         user_record = supabase.table("users").select("org_id").eq("id", user["userId"]).execute()
         if user_record.data and user_record.data[0].get("org_id"):
             org_id = user_record.data[0]["org_id"]
         else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"code": "NO_ORG", "message": "No organization selected. Please select or create an organization first."}
-            )
+            # Fallback: use user_id as org_id for single-user mode
+            org_id = user["userId"]
     
     # Create brief
     brief_insert = {
@@ -161,21 +158,12 @@ async def get_brief(
 async def list_briefs(
     authorization: str = Header(...),
 ):
-    """List briefs for the current organization"""
+    """List briefs for the current user"""
     user = await get_current_user(authorization)
     supabase = get_supabase()
 
-    # Get org_id from token or fallback to users table
-    org_id = user.get("orgId")
-    if not org_id:
-        user_record = supabase.table("users").select("org_id").eq("id", user["userId"]).execute()
-        if user_record.data:
-            org_id = user_record.data[0].get("org_id")
-    
-    if not org_id:
-        return {"briefs": []}
-
-    response = supabase.table("briefs").select("*").eq("org_id", org_id).order("created_at", desc=True).execute()
+    # Simple: just get briefs created by this user
+    response = supabase.table("briefs").select("*").eq("created_by", user["userId"]).order("created_at", desc=True).execute()
     briefs = response.data or []
 
     return {"briefs": [_map_brief(brief, include_tasks=False) for brief in briefs]}
