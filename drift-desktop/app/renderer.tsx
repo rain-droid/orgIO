@@ -10,7 +10,7 @@ console.time('react mount')
 ReactDOM.createRoot(document.getElementById('app') as HTMLElement).render(
   <React.StrictMode>
     <UIStateProvider>
-      <WindowContextProvider titlebar={{ title: 'Drift', icon: appIcon, menuItems }}>
+      <WindowContextProvider titlebar={{ title: 'Orgio', icon: appIcon, menuItems }}>
         <App />
       </WindowContextProvider>
     </UIStateProvider>

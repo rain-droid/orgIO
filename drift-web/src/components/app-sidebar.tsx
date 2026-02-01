@@ -116,7 +116,7 @@ export function AppSidebar({
             <SidebarMenuButton size="lg" asChild>
               <a href="#" onClick={() => onViewChange?.('home')}>
                 <div className="bg-foreground text-background flex aspect-square size-8 items-center justify-center">
-                  <span className="font-bold text-sm">D</span>
+                  <span className="font-bold text-sm">O</span>
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">Orgio</span>
