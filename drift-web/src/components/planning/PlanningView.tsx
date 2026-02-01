@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
-// Role type is inferred from roleConfig
+type Role = 'pm' | 'dev' | 'designer'
 
 interface Task {
   id: string
