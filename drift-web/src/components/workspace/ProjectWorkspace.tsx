@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@clerk/clerk-react'
 import { api } from '@/lib/api'
 import type { Brief, Role } from '@/types'
@@ -14,7 +14,11 @@ import {
   Circle,
   Play,
   MessageSquare,
-  Send
+  Send,
+  AlertTriangle,
+  Sparkles,
+  Bell,
+  X
 } from 'lucide-react'
 
 interface ProjectWorkspaceProps {
@@ -30,6 +34,17 @@ interface Task {
   priority: 'high' | 'medium' | 'low'
   estimated_hours: number
   status: 'todo' | 'in_progress' | 'done'
+  wasRecentlyUpdated?: boolean
+}
+
+interface SessionUpdate {
+  sessionId: string
+  briefId: string
+  updatedTaskIds: string[]
+  newTaskIds: string[]
+  issues: string[]
+  aiSummary: string
+  timestamp: Date
 }
 
 const roleConfig = {

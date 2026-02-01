@@ -5,10 +5,14 @@ from fastapi import APIRouter, HTTPException, Header, WebSocket, WebSocketDiscon
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import json
 
 from services.clerk_auth import verify_clerk_token
 from services.supabase_client import get_supabase
 from services.websocket_manager import websocket_manager
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage
+from config.settings import settings
 
 router = APIRouter()
 
@@ -39,6 +43,17 @@ class DesktopSyncRequest(BaseModel):
     userId: str
     orgId: Optional[str] = None
     activities: Optional[List[ActivityEntry]] = None
+
+
+class SessionAnalyzeRequest(BaseModel):
+    """Request to analyze a completed session."""
+    sessionId: str
+    submissionId: Optional[str] = None
+    briefId: Optional[str] = None
+    activities: Optional[List[Dict[str, Any]]] = None
+    notes: Optional[List[Dict[str, Any]]] = None
+    summaryLines: List[str]
+    durationMinutes: int
 
 
 @router.post("/desktop/sync")
@@ -301,6 +316,198 @@ async def end_session(
         "durationMinutes": duration_minutes,
         "summaryLines": summary_lines
     }
+
+
+@router.post("/desktop/session/analyze")
+async def analyze_session(
+    request: SessionAnalyzeRequest,
+    authorization: str = Header(...)
+):
+    """
+    Analyze a completed work session using AI.
+    Compares work done against existing tasks and updates project status.
+    
+    Returns:
+    - updatedTasks: Tasks that were marked as done/in_progress
+    - newTasks: New tasks identified from the work
+    - issues: Any deviations from plan or concerns
+    - aiSummary: AI-generated summary of the session
+    """
+    token = authorization.replace("Bearer ", "")
+    user_info = await verify_clerk_token(token)
+    user_id = user_info["userId"]
+    org_id = user_info.get("orgId")
+    
+    supabase = get_supabase()
+    
+    # Get brief and existing tasks
+    brief_id = request.briefId
+    if not brief_id and request.sessionId:
+        # Try to get brief from session
+        session_result = supabase.table("work_sessions")\
+            .select("brief_id")\
+            .eq("id", request.sessionId)\
+            .single()\
+            .execute()
+        if session_result.data:
+            brief_id = session_result.data.get("brief_id")
+    
+    existing_tasks = []
+    if brief_id:
+        tasks_result = supabase.table("tasks")\
+            .select("id, title, description, status, priority, role")\
+            .eq("brief_id", brief_id)\
+            .execute()
+        existing_tasks = tasks_result.data or []
+    
+    # Build context for AI analysis
+    activity_summary = ""
+    if request.activities:
+        for act in request.activities:
+            app = act.get("app", "Unknown")
+            duration = act.get("totalDuration", 0) // 60
+            files = act.get("files", [])
+            if duration > 0:
+                activity_summary += f"- {app}: {duration}m"
+                if files:
+                    activity_summary += f" (files: {', '.join(files[:3])})"
+                activity_summary += "\n"
+    
+    notes_text = ""
+    if request.notes:
+        notes_text = "\n".join([f"- {n.get('text', '')}" for n in request.notes])
+    
+    tasks_text = ""
+    for task in existing_tasks:
+        tasks_text += f"- [{task['status'].upper()}] {task['title']}: {task.get('description', '')}\n"
+    
+    # AI Analysis Prompt
+    analysis_prompt = f"""Analyze this work session and compare it to the project's existing tasks.
+
+SESSION DATA:
+- Duration: {request.durationMinutes} minutes
+- Summary: {', '.join(request.summaryLines)}
+
+ACTIVITY LOG:
+{activity_summary or 'No activity logged'}
+
+USER NOTES:
+{notes_text or 'No notes'}
+
+EXISTING PROJECT TASKS:
+{tasks_text or 'No tasks defined yet'}
+
+ANALYZE AND RETURN JSON:
+{{
+    "updatedTasks": [
+        {{"taskId": "task_id_if_exists", "title": "Task title", "status": "done|in_progress", "wasUpdated": true, "reason": "Why this task was updated"}}
+    ],
+    "newTasks": [
+        {{"title": "New task title", "description": "What needs to be done", "priority": "high|medium|low", "reason": "Why this task was identified"}}
+    ],
+    "issues": [
+        "Any concerns, blockers, or deviations from plan"
+    ],
+    "aiSummary": "One paragraph summary of what was accomplished and project status"
+}}
+
+RULES:
+1. Only mark tasks as "done" if the work clearly completed them
+2. Mark tasks as "in_progress" if work started but not finished
+3. Add newTasks only for clear follow-up work identified
+4. Add issues if: work took longer than expected, blocked on something, or deviated from plan
+5. Be concise but specific in the aiSummary
+
+Return ONLY valid JSON, no other text."""
+
+    try:
+        llm = ChatOpenAI(
+            model="gpt-4o",
+            temperature=0.3,
+            api_key=settings.OPENAI_API_KEY
+        )
+        
+        response = await llm.ainvoke([HumanMessage(content=analysis_prompt)])
+        content = response.content
+        
+        # Parse JSON
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+        
+        result = json.loads(content)
+        
+        # Update tasks in database
+        updated_task_ids = []
+        for updated in result.get("updatedTasks", []):
+            if updated.get("wasUpdated") and updated.get("taskId"):
+                task_id = updated["taskId"]
+                new_status = updated.get("status", "in_progress")
+                
+                supabase.table("tasks")\
+                    .update({"status": new_status})\
+                    .eq("id", task_id)\
+                    .execute()
+                updated_task_ids.append(task_id)
+        
+        # Insert new tasks
+        new_task_ids = []
+        for new_task in result.get("newTasks", []):
+            if brief_id:
+                insert_result = supabase.table("tasks")\
+                    .insert({
+                        "brief_id": brief_id,
+                        "title": new_task["title"],
+                        "description": new_task.get("description", ""),
+                        "priority": new_task.get("priority", "medium"),
+                        "status": "todo",
+                        "role": "dev"  # Default role
+                    })\
+                    .execute()
+                if insert_result.data:
+                    new_task_ids.append(insert_result.data[0]["id"])
+        
+        # Update submission with analysis
+        if request.submissionId:
+            supabase.table("submissions")\
+                .update({
+                    "ai_analysis": result.get("aiSummary"),
+                    "status": "reviewed"
+                })\
+                .eq("id", request.submissionId)\
+                .execute()
+        
+        # Notify web clients
+        try:
+            await websocket_manager.broadcast_event(
+                "workspace:updated",
+                {
+                    "sessionId": request.sessionId,
+                    "briefId": brief_id,
+                    "updatedTaskIds": updated_task_ids,
+                    "newTaskIds": new_task_ids,
+                    "issues": result.get("issues", []),
+                    "aiSummary": result.get("aiSummary", "")
+                },
+                org_id
+            )
+        except:
+            pass
+        
+        return result
+        
+    except json.JSONDecodeError as e:
+        print(f"JSON parse error: {e}")
+        return {
+            "updatedTasks": [],
+            "newTasks": [],
+            "issues": ["Failed to parse AI analysis"],
+            "aiSummary": "Session recorded but analysis failed. Please review manually."
+        }
+    except Exception as e:
+        print(f"Session analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.websocket("/desktop/ws")

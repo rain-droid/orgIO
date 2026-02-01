@@ -18,6 +18,16 @@ interface Project {
   status?: string
 }
 
+// Session summary from API
+interface SessionSummary {
+  sessionId: string
+  submissionId?: string
+  durationMinutes: number
+  summaryLines: string[]
+  activitySummary?: Array<{ app: string; totalDuration: number; files: string[] }>
+  notes?: Array<{ text: string; timestamp: number }>
+}
+
 // Voice Equalizer Component with real mic input
 function VoiceEqualizer({ isActive }: { isActive: boolean }) {
   const [levels, setLevels] = useState([2, 2, 2])
@@ -108,8 +118,9 @@ export const Mainbar = () => {
   const [currentActivity, setCurrentActivity] = useState<string | null>(null)
   const [showSessionChat, setShowSessionChat] = useState(false)
   const [sessionChatPosition, setSessionChatPosition] = useState({ top: 0, left: 0 })
+  const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null)
+  const [sessionEnded, setSessionEnded] = useState(false) // Track if session just ended
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const activityPollRef = useRef<NodeJS.Timeout | null>(null)
   const activitiesRef = useRef<Array<{ app: string; title: string; duration: number; timestamp: number }>>([])
   const dropdownRef = useRef<HTMLDivElement>(null)
   const sessionChatButtonRef = useRef<HTMLButtonElement>(null)
@@ -363,7 +374,7 @@ export const Mainbar = () => {
       }
       setRecordingTime(0)
       setCurrentActivity(null)
-      setShowSessionChat(false)
+      // Don't close the chat - keep it open to show summary
     }
     return () => {
       if (recordingIntervalRef.current) {
@@ -390,14 +401,27 @@ export const Mainbar = () => {
           const result = await window.api.invoke('session:start', projectId, userRole)
           if (result && !result.error) {
             activitiesRef.current = []
+            setSessionSummary(null)
+            setSessionEnded(false)
             setIsRecording(true)
+            setShowSessionChat(true)
           }
         }
       } else {
         // End session via API
-        const result = await window.api.invoke('session:end', activitiesRef.current)
+        const result = await window.api.invoke('session:end')
         if (result && !result.error) {
           setIsRecording(false)
+          setSessionEnded(true)
+          setSessionSummary({
+            sessionId: result.sessionId,
+            submissionId: result.submissionId,
+            durationMinutes: result.durationMinutes,
+            summaryLines: result.summaryLines || [],
+            activitySummary: result.activitySummary,
+            notes: result.notes
+          })
+          setShowSessionChat(true)
         }
       }
     }
@@ -444,16 +468,30 @@ export const Mainbar = () => {
         const result = await window.api.invoke('session:start', projectId, userRole)
         if (result && !result.error) {
           activitiesRef.current = []
+          setSessionSummary(null)
+          setSessionEnded(false)
           setIsRecording(true)
+          setShowSessionChat(true) // Open chat when session starts
         } else {
           console.error('Failed to start session:', result?.error)
         }
       }
     } else {
       // End session
-      const result = await window.api.invoke('session:end', activitiesRef.current)
+      const result = await window.api.invoke('session:end')
       if (result && !result.error) {
         setIsRecording(false)
+        setSessionEnded(true)
+        // Set summary - keep chat open to show it
+        setSessionSummary({
+          sessionId: result.sessionId,
+          submissionId: result.submissionId,
+          durationMinutes: result.durationMinutes,
+          summaryLines: result.summaryLines || [],
+          activitySummary: result.activitySummary,
+          notes: result.notes
+        })
+        setShowSessionChat(true) // Make sure chat is open to show summary
       } else {
         console.error('Failed to end session:', result?.error)
       }
@@ -481,6 +519,36 @@ export const Mainbar = () => {
 
   const handleVoiceClick = () => {
     setIsVoiceActive(!isVoiceActive)
+  }
+
+  const handleAddToWorkspace = async (summary: SessionSummary) => {
+    // Open the web app to the submission review page
+    const webUrl = process.env.DRIFT_WEB_URL || 'https://test.usehavoc.com'
+    const submissionUrl = summary.submissionId 
+      ? `${webUrl}?view=reviews&submission=${summary.submissionId}`
+      : `${webUrl}?view=reviews`
+    
+    // Open in browser
+    const { shell } = window.require ? window.require('electron') : { shell: null }
+    if (shell) {
+      shell.openExternal(submissionUrl)
+    } else {
+      window.open(submissionUrl, '_blank')
+    }
+    
+    // Close the chat and reset
+    setShowSessionChat(false)
+    setSessionSummary(null)
+    setSessionEnded(false)
+  }
+
+  const handleCloseSessionChat = () => {
+    setShowSessionChat(false)
+    // If session has ended, also clear the summary
+    if (sessionEnded) {
+      setSessionSummary(null)
+      setSessionEnded(false)
+    }
   }
 
   const dropdownPortal = showProjectDropdown && createPortal(
@@ -620,16 +688,21 @@ export const Mainbar = () => {
                   {currentActivity}
                 </span>
               )}
-              <Button
-                ref={sessionChatButtonRef}
-                variant={showSessionChat ? 'secondary' : 'ghost'}
-                size="xs"
-                onClick={() => setShowSessionChat(!showSessionChat)}
-                title="Session Activity & Notes"
-              >
-                <Activity size={12} />
-              </Button>
             </>
+          )}
+          
+          {/* Show activity button during recording OR when session ended with summary */}
+          {(isRecording || sessionEnded) && (
+            <Button
+              ref={sessionChatButtonRef}
+              variant={showSessionChat ? 'secondary' : 'ghost'}
+              size="xs"
+              onClick={() => setShowSessionChat(!showSessionChat)}
+              title={sessionEnded ? "View Session Summary" : "Session Activity & Notes"}
+            >
+              <Activity size={12} />
+              {sessionEnded && <span className="ml-1 w-2 h-2 bg-emerald-500 rounded-full" />}
+            </Button>
           )}
 
           {/* Project Selector */}
@@ -731,8 +804,8 @@ export const Mainbar = () => {
         </div>
       </div>
       
-      {/* Session Chat Portal */}
-      {showSessionChat && isRecording && createPortal(
+      {/* Session Chat Portal - show during recording OR when session just ended with summary */}
+      {showSessionChat && (isRecording || sessionEnded) && createPortal(
         <div
           style={{
             position: 'fixed',
@@ -743,7 +816,9 @@ export const Mainbar = () => {
         >
           <SessionChat 
             isVisible={true} 
-            onClose={() => setShowSessionChat(false)} 
+            onClose={handleCloseSessionChat}
+            sessionSummary={sessionSummary}
+            onAddToWorkspace={handleAddToWorkspace}
           />
         </div>,
         document.body

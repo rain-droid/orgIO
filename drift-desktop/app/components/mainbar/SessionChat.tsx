@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Send, FileCode, Clock, Eye, EyeOff, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
+import { Send, FileCode, Clock, Eye, EyeOff, ChevronDown, ChevronUp, Sparkles, CheckCircle, Upload, X } from 'lucide-react'
 import { Button } from '../ui/button'
 
 interface ActivityEntry {
@@ -13,16 +13,33 @@ interface ActivityEntry {
 }
 
 interface SessionMessage {
-  type: 'activity' | 'note' | 'system'
+  type: 'activity' | 'note' | 'system' | 'summary'
   content: string
   timestamp: number
   app?: string
   file?: string
   screenshot?: string
   isRelevant?: boolean
+  summaryData?: SessionSummaryData
 }
 
-export function SessionChat({ isVisible, onClose }: { isVisible: boolean; onClose: () => void }) {
+interface SessionSummaryData {
+  sessionId: string
+  submissionId?: string
+  durationMinutes: number
+  summaryLines: string[]
+  activitySummary?: Array<{ app: string; totalDuration: number; files: string[] }>
+  notes?: Array<{ text: string; timestamp: number }>
+}
+
+interface SessionChatProps {
+  isVisible: boolean
+  onClose: () => void
+  sessionSummary?: SessionSummaryData | null
+  onAddToWorkspace?: (summary: SessionSummaryData) => void
+}
+
+export function SessionChat({ isVisible, onClose, sessionSummary, onAddToWorkspace }: SessionChatProps) {
   const [messages, setMessages] = useState<SessionMessage[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isExpanded, setIsExpanded] = useState(true)
@@ -75,6 +92,23 @@ export function SessionChat({ isVisible, onClose }: { isVisible: boolean; onClos
       window.api.removeAllListeners('session:activity')
     }
   }, [])
+
+  // Add summary message when session ends
+  useEffect(() => {
+    if (sessionSummary) {
+      setMessages(prev => {
+        // Check if summary already added
+        if (prev.some(m => m.type === 'summary')) return prev
+        
+        return [...prev, {
+          type: 'summary',
+          content: 'Session completed',
+          timestamp: Date.now(),
+          summaryData: sessionSummary
+        }]
+      })
+    }
+  }, [sessionSummary])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -175,6 +209,7 @@ export function SessionChat({ isVisible, onClose }: { isVisible: boolean; onClos
               <div key={i} className={`text-xs ${
                 msg.type === 'system' ? 'text-gray-400 text-center italic' :
                 msg.type === 'note' ? 'bg-blue-50 rounded-lg p-2' :
+                msg.type === 'summary' ? 'bg-emerald-50 rounded-lg p-3 border border-emerald-200' :
                 'bg-white/50 rounded-lg p-2'
               }`}>
                 {msg.type === 'activity' && (
@@ -211,6 +246,53 @@ export function SessionChat({ isVisible, onClose }: { isVisible: boolean; onClos
                         </span>
                       </div>
                     </div>
+                  </div>
+                )}
+                {msg.type === 'summary' && msg.summaryData && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle size={14} className="text-emerald-600" />
+                      <span className="font-semibold text-emerald-800">Session Complete</span>
+                    </div>
+                    
+                    {/* Duration */}
+                    <div className="flex items-center gap-2 text-emerald-700">
+                      <Clock size={12} />
+                      <span>{msg.summaryData.durationMinutes} minutes</span>
+                    </div>
+                    
+                    {/* Summary Lines */}
+                    {msg.summaryData.summaryLines.length > 0 && (
+                      <div className="space-y-1">
+                        {msg.summaryData.summaryLines.map((line, idx) => (
+                          <div key={idx} className="text-emerald-800">• {line}</div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Activity Summary */}
+                    {msg.summaryData.activitySummary && msg.summaryData.activitySummary.length > 0 && (
+                      <div className="space-y-1 pt-2 border-t border-emerald-200">
+                        <div className="text-[10px] uppercase tracking-wide text-emerald-600 font-medium">Activity Breakdown</div>
+                        {msg.summaryData.activitySummary.slice(0, 5).map((activity, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-emerald-700">
+                            <span className="truncate">{activity.app}</span>
+                            <span className="text-[10px]">{Math.round(activity.totalDuration / 60)}m</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Add to Workspace Button */}
+                    {onAddToWorkspace && (
+                      <button
+                        onClick={() => onAddToWorkspace(msg.summaryData!)}
+                        className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors font-medium"
+                      >
+                        <Upload size={14} />
+                        Add to Workspace
+                      </button>
+                    )}
                   </div>
                 )}
                 {msg.type === 'system' && msg.content}

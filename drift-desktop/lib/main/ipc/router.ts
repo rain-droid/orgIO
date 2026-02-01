@@ -232,6 +232,8 @@ export function registerIpcHandlers(ctx: IpcContext): void {
 
   /* ---------------- Session Management (connect to Drift backend) ---------------- */
   let activeSessionId: string | null = null
+  let activeSessionBriefId: string | null = null
+  let activeSessionBriefName: string | null = null
 
   ipcMain.handle('session:start', async (_evt, briefId: string, role: string) => {
     const s = await getStore()
@@ -258,6 +260,8 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       
       const data = await response.json()
       activeSessionId = data.sessionId
+      activeSessionBriefId = data.briefId || briefId
+      activeSessionBriefName = data.briefName || 'Project'
       
       // Start activity tracking with live updates
       activityTracker.start(role, (activity) => {
@@ -346,9 +350,13 @@ export function registerIpcHandlers(ctx: IpcContext): void {
       }
       
       const data = await response.json()
+      const briefId = activeSessionBriefId
+      const briefName = activeSessionBriefName
       activeSessionId = null
-      broadcast('session:ended', { ...data, activitySummary, notes })
-      return { ...data, activitySummary, notes }
+      activeSessionBriefId = null
+      activeSessionBriefName = null
+      broadcast('session:ended', { ...data, activitySummary, notes, briefId, briefName })
+      return { ...data, activitySummary, notes, briefId, briefName }
     } catch (error) {
       console.error('Session end error:', error)
       return { error: String(error) }
@@ -368,6 +376,54 @@ export function registerIpcHandlers(ctx: IpcContext): void {
   
   ipcMain.handle('session:get-status', () => {
     return activityTracker.getStatus()
+  })
+
+  // Analyze session and update workspace tasks
+  ipcMain.handle('session:analyze', async (_evt, data: {
+    sessionId: string
+    submissionId?: string
+    briefId?: string
+    activities?: Array<{ app: string; totalDuration: number; files: string[] }>
+    notes?: Array<{ text: string; timestamp: number }>
+    summaryLines: string[]
+    durationMinutes: number
+  }) => {
+    const s = await getStore()
+    const authToken = s.get('authToken')
+    
+    if (!authToken) {
+      return { error: 'Not authenticated' }
+    }
+    
+    try {
+      const response = await fetch(`${DRIFT_API_URL}/desktop/session/analyze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify(data)
+      })
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Session analysis failed: ${response.status} - ${errorText}`)
+      }
+      
+      const result = await response.json()
+      
+      // Broadcast to web clients that workspace was updated
+      broadcast('workspace:updated', {
+        sessionId: data.sessionId,
+        briefId: data.briefId,
+        ...result
+      })
+      
+      return result
+    } catch (error) {
+      console.error('Session analysis error:', error)
+      return { error: String(error) }
+    }
   })
 
   /* ---------------- Sync with Drift backend ---------------- */
